@@ -1,0 +1,10 @@
+pyRDDLGym>=2.0
+rddlrepository
+numpy
+matplotlib
+moviepy
+torch
+gymnasium
+Pillow
+pygame-ce
+opencv-python

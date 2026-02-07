@@ -1,0 +1,103 @@
+import os
+import sys
+import torch
+import pyRDDLGym
+from pyRDDLGym.core.visualizer.movie import MovieGenerator
+
+# Add the project root to sys.path to allow 'from src.xxx import yyy'
+BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_PATH not in sys.path:
+    sys.path.insert(0, BASE_PATH)
+
+# Local Imports
+from src.generator import generate_instance
+from src.visualizer import TrainRouteVisualizer
+from src.wrappers import RDDLDecisionWrapper, PPOAdapter
+from src.agent import PPO, Memory, device
+
+# Configuration
+# BASE_PATH is already defined above
+RDDL_DIR = os.path.join(BASE_PATH, 'rddl')
+OUTPUT_DIR = os.path.join(BASE_PATH, 'output')
+DOMAIN_PATH = os.path.join(RDDL_DIR, 'domain.rddl')
+INSTANCE_PATH = os.path.join(RDDL_DIR, 'instance.rddl')
+
+# 1. Generate Instance
+print("Generating Instance...")
+rddl_content = generate_instance(num_trains=3, num_stations=4, horizon=50)
+with open(INSTANCE_PATH, 'w') as f:
+    f.write(rddl_content)
+
+# 2. Setup Environment
+env = pyRDDLGym.make(domain=DOMAIN_PATH, instance=INSTANCE_PATH)
+movie_gen = MovieGenerator(OUTPUT_DIR, 'train_scheduler', 50)
+env.set_visualizer(TrainRouteVisualizer, movie_gen=movie_gen, movie_per_episode=True)
+
+# 3. Apply Wrappers
+env = RDDLDecisionWrapper(env)
+env = PPOAdapter(env)
+
+# 4. Initialize Agent
+state_dim = env.observation_space.shape[0]
+action_dim = 11
+ppo = PPO(state_dim, action_dim, lr=0.002, betas=(0.9, 0.999), gamma=0.99, K_epochs=4, eps_clip=0.2)
+memory = Memory()
+
+# 5. Training Configuration
+checkpoint_dir = os.path.join(BASE_PATH, 'checkpoints')
+os.makedirs(checkpoint_dir, exist_ok=True)
+latest_model_path = os.path.join(checkpoint_dir, 'latest_model.pth')
+best_model_path = os.path.join(checkpoint_dir, 'best_model.pth')
+
+start_episode = 1
+max_episodes = 5000
+update_timestep = 2000
+log_interval = 20
+save_interval = 50
+time_step = 0
+running_reward = 0
+best_reward = -float('inf')
+
+if os.path.exists(latest_model_path):
+    start_episode = ppo.load_checkpoint(latest_model_path) + 1
+    print(f"Resuming from episode {start_episode}")
+
+# 6. Training Loop
+print(f"Starting Training on {device}...")
+for episode in range(start_episode, max_episodes + 1):
+    state, _ = env.reset()
+    current_ep_reward = 0
+    
+    # Use env.unwrapped.model.horizon to get the horizon from the base environment
+    for t in range(env.unwrapped.model.horizon):
+        time_step += 1
+        action = ppo.select_action(state, memory)
+        state, reward, done, truncated, _ = env.step(action)
+        
+        memory.rewards.append(reward)
+        memory.is_terminals.append(done)
+        current_ep_reward += reward
+        
+        if time_step % update_timestep == 0:
+            ppo.update(memory)
+            memory.clear()
+            time_step = 0
+            
+        if done or truncated:
+            break
+            
+    running_reward += current_ep_reward
+    
+    if current_ep_reward > best_reward:
+        best_reward = current_ep_reward
+        ppo.save_checkpoint(best_model_path, episode)
+        
+    if episode % save_interval == 0:
+        ppo.save_checkpoint(latest_model_path, episode)
+        
+    if episode % log_interval == 0:
+        avg_reward = running_reward / log_interval
+        print(f"Episode {episode} \t Avg Reward: {avg_reward:.2f} \t Best: {best_reward:.2f}")
+        running_reward = 0
+
+env.close()

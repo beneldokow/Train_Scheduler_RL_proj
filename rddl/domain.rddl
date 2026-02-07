@@ -1,0 +1,196 @@
+domain train_system {
+
+    requirements = {
+        concurrent,
+        reward-deterministic,
+        intermediate-nodes,
+        constrained-state
+    };
+
+    types {
+        train: object;
+        station: object;
+    };
+
+    pvariables{
+
+        //train constants
+        CAPACITY(train): {non-fluent, int, default=1000};
+        PASSENGERS_BOARDING_PER_MINUTE(train): {non-fluent, int, default=75};
+        PASSENGERS_DISEMBARKING_PER_MINUTE(train): {non-fluent, int, default=75};
+        NEXT_TRAIN(train, train): {non-fluent, bool, default=false};
+        MIN_STOP_TIME(train): {non-fluent, real, default=2.0};
+
+        //station constants
+        INF : {non-fluent, real, default=1000000.0};
+        FIRST_TRAIN : {non-fluent, train};
+        DEPOT_STATION(station): {non-fluent, bool, default=false};
+        NEXT_STATION(station, station): {non-fluent, bool, default=false};
+        DRIVE_TIME(station, station): {non-fluent, real, default=0.0};
+        FIND_NEXT_STATION(station): {non-fluent, station};
+        DISEMBARKING_PRECENTAGE(station): {non-fluent, real, default=0.2};
+        PASSENGER_ARRIVAL_RATE(station): {non-fluent, int, default=6};
+        PLANNED_DEPARTURE_TIME(train, station): {non-fluent, real, default=0.0};
+
+        //timing constants
+        SCHEDULED_DEPARTURE_TIME(train, station): {non-fluent, real, default=0.0};
+
+        //timer variables
+        train_timer(train): {state-fluent, real, default=0.0};
+
+        // --- NEW: Absolute Clock ---
+        current_time: {state-fluent, real, default=0.0};
+
+        //interm fluent
+        active_time_calc(train): {interm-fluent, real};
+        people_boarding_calc(train, station): {interm-fluent, real};
+        people_disembarking_calc(train, station): {interm-fluent, real};
+        entering_empty_queue(train): {interm-fluent, bool};
+        leaving_queue(train): {interm-fluent, bool};
+        global_timer: {interm-fluent, real};
+
+        // train state enum
+        TRAIN_IN_ROUTE   : {non-fluent, int, default=0};
+        TRAIN_IN_QUEUE   : {non-fluent, int, default=1};
+        TRAIN_WAITING    : {non-fluent, int, default=2};
+        TRAIN_ACTIVE     : {non-fluent, int, default=3};
+        TRAIN_FINISHED   : {non-fluent, int, default=4};
+
+        //state variables - passengers
+        passengers_at_station(station): {state-fluent, real, default=0};
+        passengers_on_train(train): {state-fluent, real, default=0};
+
+        //state variables - train states
+        train_num_at_queue(train): {state-fluent, real, default=-1};
+        current_station(train): {state-fluent, station};
+        current_state(train): {state-fluent, int, default=0};
+
+        //actions (RENAMED from wait_action -> wait)
+        wait(station): {action-fluent, int, default=0};
+
+        //action-interm (RENAMED from wait -> delay)
+        delay(train) : {interm-fluent, int};
+    };
+
+    cpfs {
+
+        // (RENAMED: delay depends on wait)
+        delay(?t) = wait(current_station(?t));
+
+        global_timer() = min_{?t: train} [train_timer(?t)];
+
+        current_time'() = current_time() + global_timer();
+
+        leaving_queue(?t) =  current_state(?t) == TRAIN_ACTIVE ^ train_timer(?t) == global_timer();
+
+        entering_empty_queue(?t) = (FIRST_TRAIN == ?t) | exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ ((leaving_queue(?t2) ^ (current_station(?t) == current_station(?t2))) | ~(current_station(?t) == current_station(?t2)))];
+
+        people_disembarking_calc(?t,?s) = floor[DISEMBARKING_PRECENTAGE(?s) * passengers_on_train(?t)];
+
+        people_boarding_calc(?t,?s) = abs[min[CAPACITY(?t) - passengers_on_train(?t) + people_disembarking_calc(?t,?s), passengers_at_station(?s)]];
+
+        active_time_calc(?t) = max[MIN_STOP_TIME(?t),
+                                   ceil[sum_{?s: station}[[current_station(?t) == ?s ^ (current_state(?t) == TRAIN_WAITING | current_state(?t) == TRAIN_IN_ROUTE)] *
+                                           [people_disembarking_calc(?t,?s) + people_boarding_calc(?t,?s)] /
+                                            PASSENGERS_DISEMBARKING_PER_MINUTE(?t)]]];
+
+        passengers_at_station'(?s) =
+                                if(DEPOT_STATION(?s))
+                                    then 0
+                                else if(exists_{?t: train} [current_station(?t) == ?s ^ current_state(?t) == TRAIN_IN_ROUTE ^ train_timer(?t) == global_timer()])
+                                    then passengers_at_station(?s) + PASSENGER_ARRIVAL_RATE(?s) -
+                                      sum_{?t: train} [(current_station(?t) == ?s ^ current_state(?t) == TRAIN_ACTIVE) * people_boarding_calc(?t,?s)]
+                                else passengers_at_station(?s) + PASSENGER_ARRIVAL_RATE(?s);
+
+        passengers_on_train'(?t) =
+                                if(exists_{?s: station} [(current_station(?t) == ?s ^ current_state(?t) == TRAIN_ACTIVE) ^ train_timer(?t) == global_timer()])
+                                    then passengers_on_train(?t) +
+                                         sum_{?s: station}[(current_station(?t) == ?s ^ current_state(?t) == TRAIN_ACTIVE) *
+                                                         [people_boarding_calc(?t,?s) - people_disembarking_calc(?t,?s)]]
+                                else passengers_on_train(?t);
+
+        current_state'(?t) =
+                              if(current_state(?t) == TRAIN_FINISHED)
+                                    then TRAIN_FINISHED
+                              else if(exists_{?s: station} [(current_station(?t) == ?s ^ current_state(?t) == TRAIN_IN_ROUTE) ^ train_timer(?t) == global_timer() ^ DEPOT_STATION(?s)] | train_timer(?t) == INF)
+                                    then TRAIN_FINISHED
+                              else if(current_state(?t) == TRAIN_ACTIVE ^ (train_timer(?t) == global_timer()))
+                                    then TRAIN_IN_ROUTE
+
+                              // (RENAMED wait -> delay)
+                              else if(current_state(?t) == TRAIN_IN_ROUTE ^ (train_timer(?t) == global_timer()) ^ (delay(?t) > 0) ^ entering_empty_queue(?t))
+                                    then TRAIN_WAITING
+                              else if((current_state(?t) == TRAIN_IN_QUEUE) ^ delay(?t) > 0 ^
+                                                    (exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ (current_station(?t2) == current_station(?t)) ^ leaving_queue(?t2)]))
+                                    then TRAIN_WAITING
+                              else if(current_state(?t) == TRAIN_IN_ROUTE ^ (train_timer(?t) == global_timer()) ^ (delay(?t) == 0) ^ entering_empty_queue(?t))
+                                    then TRAIN_ACTIVE
+                              else if((current_state(?t) == TRAIN_IN_QUEUE) ^ (delay(?t) == 0) ^
+                                                    exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ (current_station(?t2) == current_station(?t)) ^ leaving_queue(?t2)])
+                                    then TRAIN_ACTIVE
+                              else if(current_state(?t) == TRAIN_WAITING ^ (train_timer(?t) == global_timer()))
+                                    then TRAIN_ACTIVE
+                              else if(current_state(?t) == TRAIN_IN_ROUTE ^ (train_timer(?t) == global_timer()) ^
+                                     exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ (current_station(?t2) == current_station(?t)) ^ (train_num_at_queue(?t2) >= 0.0) ^ ~(train_timer(?t2) == global_timer())])
+                                    then TRAIN_IN_QUEUE
+                              else current_state(?t);
+
+      current_station'(?t) = if((current_state(?t) == TRAIN_ACTIVE) ^ (train_timer(?t) == global_timer()))
+                                 then FIND_NEXT_STATION(current_station(?t))
+                             else current_station(?t);
+
+        train_num_at_queue'(?t) = if((current_state(?t) == TRAIN_IN_ROUTE) ^ (train_timer(?t) == global_timer()))
+                                    then[
+                                         if(exists_{?s: station} [DEPOT_STATION(?s) ^ current_station(?t) == ?s])
+                                            then -1.0
+                                         else if(exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ ~(current_station(?t) == current_station(?t2))])
+                                            then 0.0
+                                         else
+                                            sum_{?t2: train}[NEXT_TRAIN(?t2,?t) * (train_num_at_queue(?t2) + 1.0 -
+                                            sum_{?t3: train}[(current_station(?t) == current_station(?t3)) ^ current_state(?t3) == TRAIN_ACTIVE ^ train_timer(?t3) == global_timer()])]]
+                                    else if(train_num_at_queue(?t) > 0.0 ^ exists_{?t2: train} [current_station(?t) == current_station(?t2) ^
+                                                                        train_num_at_queue(?t2) == 0.0 ^
+                                                                        train_timer(?t2) == global_timer() ^
+                                                                        current_state(?t2) == TRAIN_ACTIVE])
+                                        then train_num_at_queue(?t) - 1.0
+                                    else if(train_num_at_queue(?t) == 0.0 ^ current_state(?t) == TRAIN_ACTIVE ^ train_timer(?t) == global_timer())
+                                        then -1.0
+                                    else train_num_at_queue(?t);
+
+        train_timer'(?t) =
+                    if(current_state(?t) == TRAIN_FINISHED | exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_IN_ROUTE) ^ (train_timer(?t) == global_timer()) ^ DEPOT_STATION(?s)])
+                      then INF
+                    // (RENAMED wait -> delay)
+                    else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_IN_ROUTE) ^ (train_timer(?t) == global_timer()) ^ (delay(?t) == 0) ^ entering_empty_queue(?t)])
+                      then active_time_calc(?t)
+                    else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (train_num_at_queue(?t) == 1) ^ (delay(?t) == 0) ^
+                          exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ (current_station(?t2) == ?s) ^ leaving_queue(?t2)]])
+                      then active_time_calc(?t)
+                    else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_WAITING)] ^ (train_timer(?t) == global_timer()))
+                      then active_time_calc(?t)
+                    else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_IN_ROUTE) ^ (train_timer(?t) == global_timer()) ^ (delay(?t) > 0) ^ entering_empty_queue(?t)])
+                      then delay(?t)
+                    else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (train_num_at_queue(?t) == 1) ^ (delay(?t) > 0) ^
+                            exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ (current_station(?t2) == ?s) ^ leaving_queue(?t2)]])
+                      then round[delay(?t)]
+                    else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_ACTIVE)] ^ (train_timer(?t) == global_timer()))
+                      then sum_{?s: station, ?s2: station} [(current_station(?t) == ?s) * (current_state(?t) == TRAIN_ACTIVE) * NEXT_STATION(?s,?s2) * DRIVE_TIME(?s,?s2)]
+                    else max[train_timer(?t) - global_timer() , 0.0];
+
+    };
+
+reward = -1 * abs[sum_{?t: train} [
+        (current_state(?t) == TRAIN_ACTIVE ^ train_timer(?t) == global_timer()) *
+        (PLANNED_DEPARTURE_TIME(?t, current_station(?t)) - (current_time + global_timer()))
+    ]];
+
+action-preconditions {
+          // (RENAMED wait_action -> wait)
+          forall_{?s : station} wait(?s) >= 0;
+          forall_{?s : station} wait(?s) <= 10;
+      };
+
+    state-invariants {
+
+    };
+}
