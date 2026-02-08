@@ -24,7 +24,8 @@ from src.logger import RewardLogger
 
 # Argument Parser
 parser = argparse.ArgumentParser(description="Train the Scheduler RL Agent")
-parser.add_argument("--episodes", type=int, default=5000, help="Maximum number of episodes")
+parser.add_argument("--episodes", type=int, default=5000, help="Maximum number of episodes (target)")
+parser.add_argument("--additional_episodes", type=int, default=None, help="Number of additional episodes to run from current checkpoint")
 parser.add_argument("--log_interval", type=int, default=20, help="Log interval for rewards")
 parser.add_argument("--save_interval", type=int, default=50, help="Checkpoint save interval")
 parser.add_argument("--update_timestep", type=int, default=2000, help="PPO update timestep")
@@ -41,10 +42,11 @@ INSTANCE_PATH = os.path.join(RDDL_DIR, "instance.rddl")
 # Initialize Logger
 logger = RewardLogger(OUTPUT_DIR)
 
-# 1. Generate Instance
-rddl_content = generate_instance(num_trains=3, num_stations=4, horizon=50)
-with open(INSTANCE_PATH, "w") as f:
-    f.write(rddl_content)
+# 1. Generate Instance (only if missing or forced)
+if args.force_restart or not os.path.exists(INSTANCE_PATH):
+    rddl_content = generate_instance(num_trains=3, num_stations=4, horizon=50)
+    with open(INSTANCE_PATH, "w") as f:
+        f.write(rddl_content)
 
 # 2. Setup Environment
 env = pyRDDLGym.make(domain=DOMAIN_PATH, instance=INSTANCE_PATH)
@@ -87,10 +89,15 @@ running_reward = 0
 best_reward = -float("inf")
 
 if not args.force_restart and os.path.exists(latest_model_path):
-    start_episode = ppo.load_checkpoint(latest_model_path) + 1
-    print(f"Resuming from episode {start_episode}")
+    start_episode, best_reward, time_step = ppo.load_checkpoint(latest_model_path)
+    start_episode += 1
+    print(f"Resuming from episode {start_episode} (Best Reward: {best_reward:.2f})")
 else:
     logger.clear_log()
+
+# Adjust max_episodes if additional_episodes is specified
+if args.additional_episodes is not None:
+    max_episodes = start_episode + args.additional_episodes - 1
 
 # 6. Training Loop
 print(f"Starting Training on {device}...")
@@ -122,10 +129,10 @@ for episode in pbar:
 
     if current_ep_reward > best_reward:
         best_reward = current_ep_reward
-        ppo.save_checkpoint(best_model_path, episode)
+        ppo.save_checkpoint(best_model_path, episode, best_reward, time_step)
 
     if episode % save_interval == 0:
-        ppo.save_checkpoint(latest_model_path, episode)
+        ppo.save_checkpoint(latest_model_path, episode, best_reward, time_step)
 
     if episode % log_interval == 0:
         avg_reward = running_reward / log_interval

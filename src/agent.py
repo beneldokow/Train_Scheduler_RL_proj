@@ -119,12 +119,14 @@ class PPO:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     # --- UPDATED SAVE FUNCTION ---
-    def save_checkpoint(self, path, episode_num):
+    def save_checkpoint(self, path, episode_num, best_reward, time_step):
         torch.save(
             {
                 "model_state": self.policy_old.state_dict(),
                 "optimizer_state": self.optimizer.state_dict(),
                 "episode": episode_num,
+                "best_reward": best_reward,
+                "time_step": time_step,
             },
             path,
         )
@@ -139,5 +141,9 @@ class PPO:
         self.policy_old.load_state_dict(checkpoint["model_state"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state"])
 
-        # Return the saved episode number
-        return checkpoint.get("episode", 1)
+        # Return the saved metadata
+        return (
+            checkpoint.get("episode", 1),
+            checkpoint.get("best_reward", -float("inf")),
+            checkpoint.get("time_step", 0),
+        )
