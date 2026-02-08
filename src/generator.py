@@ -1,7 +1,16 @@
 import random
 import math
 
-def generate_instance(num_trains, num_stations, horizon, interval=30, start_delay=10, train_capacity=1000, boarding_speed=75):
+
+def generate_instance(
+    num_trains,
+    num_stations,
+    horizon,
+    interval=30,
+    start_delay=10,
+    train_capacity=1000,
+    boarding_speed=75,
+):
 
     if num_trains < 2 or num_stations < 2:
         raise ValueError("There must be at least 2 trains and 2 stations.")
@@ -22,18 +31,18 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
     # Disembarking Percentages
     station_weights = [random.randint(1, 10) for _ in range(num_stations)]
     total_weight = sum(station_weights)
-    if total_weight == 0: total_weight = 1
+    if total_weight == 0:
+        total_weight = 1
 
     disembarking_percentages = {
-        stations[i]: station_weights[i] / total_weight
-        for i in range(num_stations)
+        stations[i]: station_weights[i] / total_weight for i in range(num_stations)
     }
 
     # Passenger Arrival Rates
     # Last station (Depot) gets 0 arrival rate. s1 gets a normal random rate.
     passenger_arrival_rates = {}
     for i, station in enumerate(stations):
-        if i == len(stations) - 1: # Last station
+        if i == len(stations) - 1:  # Last station
             passenger_arrival_rates[station] = 0
         else:
             passenger_arrival_rates[station] = random.randint(2, 8)
@@ -59,8 +68,11 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
 
             # --- SNAPSHOT LOGIC ---
             # For t1 at s1, accumulation_interval will be 'start_delay' (e.g. 10 - 0 = 10 mins).
-            accumulation_interval = natural_arrival_time - station_last_snapshot_time[station]
-            if accumulation_interval < 0: accumulation_interval = 0
+            accumulation_interval = (
+                natural_arrival_time - station_last_snapshot_time[station]
+            )
+            if accumulation_interval < 0:
+                accumulation_interval = 0
 
             new_arrivals = accumulation_interval * passenger_arrival_rates[station]
             total_waiting = new_arrivals + station_leftover_passengers[station]
@@ -68,13 +80,16 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
             station_last_snapshot_time[station] = natural_arrival_time
 
             # --- BLOCKING LOGIC ---
-            actual_boarding_start = max(natural_arrival_time, station_free_time[station])
+            actual_boarding_start = max(
+                natural_arrival_time, station_free_time[station]
+            )
 
             # --- CAPACITY & DWELL ---
             # Disembark
             want_to_get_off = current_train_load * disembarking_percentages[station]
             current_train_load -= want_to_get_off
-            if current_train_load < 0: current_train_load = 0
+            if current_train_load < 0:
+                current_train_load = 0
 
             # Board
             space_available = train_capacity - current_train_load
@@ -125,12 +140,9 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
         output.append(f"        NEXT_STATION({stations[i]}, {stations[i+1]}) = true;\n")
         output.append(f"        FIND_NEXT_STATION({stations[i]}) = {stations[i+1]};\n")
 
-    output.append(
-     f"        FIND_NEXT_STATION({stations[-1]}) = {stations[-1]};\n"
-    )
+    output.append(f"        FIND_NEXT_STATION({stations[-1]}) = {stations[-1]};\n")
 
     output.append(f"        FIRST_TRAIN = {trains[0]};\n")
-
 
     output.append("\n")
     for (s1, s2), time in drive_times.items():
@@ -138,7 +150,9 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
 
     output.append("\n")
     for station, percentage in disembarking_percentages.items():
-        output.append(f"        DISEMBARKING_PRECENTAGE({station}) = {percentage:.2f};\n")
+        output.append(
+            f"        DISEMBARKING_PRECENTAGE({station}) = {percentage:.2f};\n"
+        )
 
     output.append("\n")
     for station, rate in passenger_arrival_rates.items():
@@ -146,7 +160,9 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
 
     output.append("\n")
     for (train, station), time in planned_departures.items():
-        output.append(f"        PLANNED_DEPARTURE_TIME({train}, {station}) = {int(time)};\n")
+        output.append(
+            f"        PLANNED_DEPARTURE_TIME({train}, {station}) = {int(time)};\n"
+        )
 
     output.append("\n    };\n")
     output.append("}\n\n")
@@ -171,5 +187,6 @@ def generate_instance(num_trains, num_stations, horizon, interval=30, start_dela
     output.append("}\n")
 
     return "".join(output)
+
 
 pass
