@@ -58,7 +58,8 @@ You can use the helper script to run the training without manually activating th
 ```
 
 **Available Arguments:**
-- `--episodes`: Maximum number of episodes (default: 5000).
+- `--episodes`: Maximum number of episodes (target) (default: 5000).
+- `--additional_episodes`: Number of additional episodes to run from current checkpoint.
 - `--log_interval`: How often to update the log/plot (default: 20).
 - `--save_interval`: How often to save checkpoints (default: 50).
 - `--force_restart`: Ignore existing checkpoints and start training from scratch.
