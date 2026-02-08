@@ -51,19 +51,23 @@ class RewardLogger:
             return
             
         plt.figure(figsize=(10, 5))
-        plt.plot(self.episodes, self.rewards, label='Episode Reward')
+        plt.plot(self.episodes, self.rewards, label='Episode Reward', alpha=0.6)
         
         # Add moving average if enough data
         if len(self.rewards) >= 10:
             window = 10
             moving_avg = np.convolve(self.rewards, np.ones(window)/window, mode='valid')
-            plt.plot(self.episodes[window-1:], moving_avg, label=f'{window}-ep Moving Avg', color='red')
+            plt.plot(self.episodes[window-1:], moving_avg, label=f'{window}-ep Moving Avg', color='red', linewidth=2)
+            
+        # Add a horizontal line for the best reward
+        best_achieved = max(self.rewards)
+        plt.axhline(y=best_achieved, color='green', linestyle='--', label=f'Best: {best_achieved:.2f}')
             
         plt.xlabel('Episode')
         plt.ylabel('Reward')
         plt.title('Training Rewards')
         plt.legend()
-        plt.grid(True)
+        plt.grid(True, alpha=0.3)
         
         full_save_path = os.path.join(self.log_dir, save_path)
         plt.savefig(full_save_path)
