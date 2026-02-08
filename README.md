@@ -9,9 +9,10 @@ This project uses Reinforcement Learning (PPO) to optimize train dwell times in 
   - `wrappers.py`: Environment wrappers for skipping and vectorization.
   - `generator.py`: RDDL instance generator.
   - `visualizer.py`: Custom Matplotlib visualizer.
+- `src/logger.py`: Reward logging and plotting utilities.
 - `rddl/`: RDDL domain and instance files.
 - `checkpoints/`: Saved model weights (git-ignored).
-- `output/`: Visualization outputs and gifs (git-ignored).
+- `output/`: Visualization outputs, gifs, and reward plots (git-ignored).
 
 ## 🚀 Getting Started
 
@@ -43,9 +44,24 @@ pip install -r requirements.txt
 ```
 
 ### 4. Run Training
+You can use the helper script to run the training without manually activating the virtual environment.
+
+**Basic Run:**
 ```bash
-python3 src/train.py
+./run.sh
 ```
+
+**Run with Custom Arguments:**
+```bash
+# Run for 1000 episodes, log every 10 episodes, and start fresh (ignore checkpoints)
+./run.sh --episodes 1000 --log_interval 10 --force_restart
+```
+
+**Available Arguments:**
+- `--episodes`: Maximum number of episodes (default: 5000).
+- `--log_interval`: How often to update the log/plot (default: 20).
+- `--save_interval`: How often to save checkpoints (default: 50).
+- `--force_restart`: Ignore existing checkpoints and start training from scratch.
 
 ## 🧠 Domain Logic
 The simulation runs on a custom RDDL domain where trains move between stations. The agent sets a `wait` time (0-10 minutes) at each station to minimize schedule deviation.

@@ -1,8 +1,14 @@
 import os
 import sys
 import torch
+import argparse
 import pyRDDLGym
+import warnings
 from pyRDDLGym.core.visualizer.movie import MovieGenerator
+from tqdm import tqdm
+
+# Silence specific pyRDDLGym warnings about temporary files
+warnings.filterwarnings("ignore", category=UserWarning, module="pyRDDLGym")
 
 # Add the project root to sys.path to allow 'from src.xxx import yyy'
 BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,6 +20,16 @@ from src.generator import generate_instance
 from src.visualizer import TrainRouteVisualizer
 from src.wrappers import RDDLDecisionWrapper, PPOAdapter
 from src.agent import PPO, Memory, device
+from src.logger import RewardLogger
+
+# Argument Parser
+parser = argparse.ArgumentParser(description="Train the Scheduler RL Agent")
+parser.add_argument("--episodes", type=int, default=5000, help="Maximum number of episodes")
+parser.add_argument("--log_interval", type=int, default=20, help="Log interval for rewards")
+parser.add_argument("--save_interval", type=int, default=50, help="Checkpoint save interval")
+parser.add_argument("--update_timestep", type=int, default=2000, help="PPO update timestep")
+parser.add_argument("--force_restart", action="store_true", help="Ignore checkpoints and start fresh")
+args = parser.parse_args()
 
 # Configuration
 # BASE_PATH is already defined above
@@ -22,15 +38,19 @@ OUTPUT_DIR = os.path.join(BASE_PATH, "output")
 DOMAIN_PATH = os.path.join(RDDL_DIR, "domain.rddl")
 INSTANCE_PATH = os.path.join(RDDL_DIR, "instance.rddl")
 
+# Initialize Logger
+logger = RewardLogger(OUTPUT_DIR)
+
 # 1. Generate Instance
-print("Generating Instance...")
 rddl_content = generate_instance(num_trains=3, num_stations=4, horizon=50)
 with open(INSTANCE_PATH, "w") as f:
     f.write(rddl_content)
 
 # 2. Setup Environment
 env = pyRDDLGym.make(domain=DOMAIN_PATH, instance=INSTANCE_PATH)
-movie_gen = MovieGenerator(OUTPUT_DIR, "train_scheduler", 50)
+VIS_DIR = os.path.join(OUTPUT_DIR, "visualizations")
+os.makedirs(VIS_DIR, exist_ok=True)
+movie_gen = MovieGenerator(VIS_DIR, "train_scheduler", 50)
 env.set_visualizer(TrainRouteVisualizer, movie_gen=movie_gen, movie_per_episode=True)
 
 # 3. Apply Wrappers
@@ -58,21 +78,24 @@ latest_model_path = os.path.join(checkpoint_dir, "latest_model.pth")
 best_model_path = os.path.join(checkpoint_dir, "best_model.pth")
 
 start_episode = 1
-max_episodes = 5000
-update_timestep = 2000
-log_interval = 20
-save_interval = 50
+max_episodes = args.episodes
+update_timestep = args.update_timestep
+log_interval = args.log_interval
+save_interval = args.save_interval
 time_step = 0
 running_reward = 0
 best_reward = -float("inf")
 
-if os.path.exists(latest_model_path):
+if not args.force_restart and os.path.exists(latest_model_path):
     start_episode = ppo.load_checkpoint(latest_model_path) + 1
     print(f"Resuming from episode {start_episode}")
+else:
+    logger.clear_log()
 
 # 6. Training Loop
 print(f"Starting Training on {device}...")
-for episode in range(start_episode, max_episodes + 1):
+pbar = tqdm(range(start_episode, max_episodes + 1), desc="Training")
+for episode in pbar:
     state, _ = env.reset()
     current_ep_reward = 0
 
@@ -95,6 +118,7 @@ for episode in range(start_episode, max_episodes + 1):
             break
 
     running_reward += current_ep_reward
+    logger.log(episode, current_ep_reward)
 
     if current_ep_reward > best_reward:
         best_reward = current_ep_reward
@@ -105,9 +129,11 @@ for episode in range(start_episode, max_episodes + 1):
 
     if episode % log_interval == 0:
         avg_reward = running_reward / log_interval
-        print(
-            f"Episode {episode} \t Avg Reward: {avg_reward:.2f} \t Best: {best_reward:.2f}"
+        pbar.set_postfix(
+            {"Avg Rew": f"{avg_reward:.2f}", "Best": f"{best_reward:.2f}"}
         )
         running_reward = 0
+        logger.plot()
 
 env.close()
+logger.plot() # Final plot

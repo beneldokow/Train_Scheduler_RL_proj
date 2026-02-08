@@ -8,3 +8,4 @@ gymnasium
 Pillow
 pygame-ce
 opencv-python
+tqdm
