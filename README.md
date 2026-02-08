@@ -17,7 +17,7 @@ This project uses Reinforcement Learning (PPO) to optimize train dwell times in 
 
 ### 1. Clone the repository
 ```bash
-git clone <your-repo-url>
+git clone git@github.com:beneldokow/Train_Scheduler_RL_proj.git
 cd Train_Scheduler_RL_proj
 ```
 
