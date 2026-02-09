@@ -32,6 +32,7 @@ env/
 .idea/
 
 # Project Specific
+.venv_path
 GEMINI.md
 checkpoints/
 output/

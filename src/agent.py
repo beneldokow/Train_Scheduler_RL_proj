@@ -78,11 +78,12 @@ class PPO:
         self.policy_old = ActorCritic(state_dim, action_dim, 64).to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
         self.MseLoss = nn.MSELoss()
+        self.update_count = 0
 
     def select_action(self, state, memory):
         return self.policy_old.act(state, memory)
 
-    def update(self, memory):
+    def update(self, memory, logger=None):
         rewards = []
         discounted_reward = 0
         for reward, is_terminal in zip(
@@ -98,7 +99,7 @@ class PPO:
         old_actions = torch.stack(memory.actions).to(device).detach()
         old_logprobs = torch.stack(memory.logprobs).to(device).detach()
 
-        for _ in range(self.K_epochs):
+        for epoch in range(self.K_epochs):
             logprobs, state_values, dist_entropy = self.policy.evaluate(
                 old_states, old_actions
             )
@@ -108,14 +109,33 @@ class PPO:
             surr2 = (
                 torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
             )
-            loss = (
-                -torch.min(surr1, surr2)
-                + 0.5 * self.MseLoss(state_values, rewards)
-                - 0.01 * dist_entropy
-            )
+            
+            actor_loss = -torch.min(surr1, surr2)
+            critic_loss = 0.5 * self.MseLoss(state_values, rewards)
+            entropy_loss = -0.01 * dist_entropy
+            
+            loss = actor_loss + critic_loss + entropy_loss
+            
             self.optimizer.zero_grad()
             loss.mean().backward()
+            
+            if logger and epoch == self.K_epochs - 1:
+                # Log metrics for the last epoch of the update
+                with torch.no_grad():
+                    approx_kl = (old_logprobs - logprobs).mean()
+                    clip_frac = (torch.abs(ratios - 1) > self.eps_clip).float().mean()
+                
+                logger.log_scalar("loss/total", loss.mean().item(), self.update_count)
+                logger.log_scalar("loss/actor", actor_loss.mean().item(), self.update_count)
+                logger.log_scalar("loss/critic", critic_loss.mean().item(), self.update_count)
+                logger.log_scalar("loss/entropy", dist_entropy.mean().item(), self.update_count)
+                logger.log_scalar("stats/approx_kl", approx_kl.item(), self.update_count)
+                logger.log_scalar("stats/clip_fraction", clip_frac.item(), self.update_count)
+                logger.log_model_stats(self.policy, self.update_count)
+
             self.optimizer.step()
+        
+        self.update_count += 1
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     # --- UPDATED SAVE FUNCTION ---
@@ -127,6 +147,7 @@ class PPO:
                 "episode": episode_num,
                 "best_reward": best_reward,
                 "time_step": time_step,
+                "update_count": self.update_count,
             },
             path,
         )
@@ -140,6 +161,7 @@ class PPO:
         self.policy.load_state_dict(checkpoint["model_state"])
         self.policy_old.load_state_dict(checkpoint["model_state"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state"])
+        self.update_count = checkpoint.get("update_count", 0)
 
         # Return the saved metadata
         return (

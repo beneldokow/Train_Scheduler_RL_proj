@@ -3,6 +3,29 @@ import matplotlib
 matplotlib.use('Agg') # Use non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
+
+class TensorboardLogger:
+    def __init__(self, log_dir):
+        self.writer = SummaryWriter(log_dir)
+
+    def log_scalar(self, tag, value, step):
+        self.writer.add_scalar(tag, value, step)
+
+    def log_histogram(self, tag, values, step):
+        self.writer.add_histogram(tag, values, step)
+
+    def log_model_stats(self, model, step):
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.log_histogram(f"params/{name}", param.data.cpu().numpy(), step)
+                if param.grad is not None:
+                    self.log_scalar(f"gradients_norm/{name}", param.grad.norm().item(), step)
+        self.writer.flush()
+
+    def close(self):
+        self.writer.flush()
+        self.writer.close()
 
 class RewardLogger:
     def __init__(self, log_dir, log_filename="rewards.csv"):

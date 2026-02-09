@@ -20,7 +20,8 @@ from src.generator import generate_instance
 from src.visualizer import TrainRouteVisualizer
 from src.wrappers import RDDLDecisionWrapper, PPOAdapter
 from src.agent import PPO, Memory, device
-from src.logger import RewardLogger
+from src.logger import RewardLogger, TensorboardLogger
+from src.visualize_stats import create_dashboard
 
 # Argument Parser
 parser = argparse.ArgumentParser(description="Train the Scheduler RL Agent")
@@ -36,11 +37,13 @@ args = parser.parse_args()
 # BASE_PATH is already defined above
 RDDL_DIR = os.path.join(BASE_PATH, "rddl")
 OUTPUT_DIR = os.path.join(BASE_PATH, "output")
+TENSORBOARD_DIR = os.path.join(OUTPUT_DIR, "tensorboard")
 DOMAIN_PATH = os.path.join(RDDL_DIR, "domain.rddl")
 INSTANCE_PATH = os.path.join(RDDL_DIR, "instance.rddl")
 
-# Initialize Logger
+# Initialize Loggers
 logger = RewardLogger(OUTPUT_DIR)
+tb_logger = TensorboardLogger(TENSORBOARD_DIR)
 
 # 1. Generate Instance (only if missing or forced)
 if args.force_restart or not os.path.exists(INSTANCE_PATH):
@@ -94,6 +97,11 @@ if not args.force_restart and os.path.exists(latest_model_path):
     print(f"Resuming from episode {start_episode} (Best Reward: {best_reward:.2f})")
 else:
     logger.clear_log()
+    # Clear old TensorBoard logs on fresh start
+    if os.path.exists(TENSORBOARD_DIR):
+        import shutil
+        shutil.rmtree(TENSORBOARD_DIR)
+    os.makedirs(TENSORBOARD_DIR, exist_ok=True)
 
 # Adjust max_episodes if additional_episodes is specified
 if args.additional_episodes is not None:
@@ -117,7 +125,7 @@ for episode in pbar:
         current_ep_reward += reward
 
         if time_step % update_timestep == 0:
-            ppo.update(memory)
+            ppo.update(memory, logger=tb_logger)
             memory.clear()
             time_step = 0
 
@@ -126,6 +134,7 @@ for episode in pbar:
 
     running_reward += current_ep_reward
     logger.log(episode, current_ep_reward)
+    tb_logger.log_scalar("reward/episode", current_ep_reward, episode)
 
     if current_ep_reward > best_reward:
         best_reward = current_ep_reward
@@ -144,3 +153,8 @@ for episode in pbar:
 
 env.close()
 logger.plot() # Final plot
+tb_logger.close()
+
+# Generate interactive dashboard
+DASHBOARD_PATH = os.path.join(OUTPUT_DIR, "training_dashboard.html")
+create_dashboard(TENSORBOARD_DIR, latest_model_path, DASHBOARD_PATH)

@@ -9,3 +9,6 @@ Pillow
 pygame-ce
 opencv-python
 tqdm
+tensorboard
+plotly
+pandas
