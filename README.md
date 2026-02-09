@@ -63,10 +63,22 @@ You can use the helper script to run the training without manually activating th
 - `--log_interval`: How often to update the log/plot (default: 20).
 - `--save_interval`: How often to save checkpoints (default: 50).
 - `--force_restart`: Ignore existing checkpoints and start training from scratch.
+- `--reuse [<name>]`: (run.sh only) Use a pre-existing instance from `rddl/instances/`. If `<name>` is omitted, it lists available instances.
+- `--instance_path <path>`: Run with a specific RDDL instance file path.
+- `--num_trains`: Number of trains for generated instance (default: 3).
+- `--num_stations`: Number of stations for generated instance (default: 4).
+- `--variance_factor`: Controls randomness of passenger arrivals (default: 0.2).
 
 ## 🧠 Domain Logic
 The simulation runs on a custom RDDL domain where trains move between stations. The agent sets a `wait` time (0-10 minutes) at each station to minimize schedule deviation.
 
+### 🌟 Key Features
+- **Stochastic Arrivals:** Passenger arrivals follow a Normal distribution: `round[max[0, Normal(mean, var)]]`. Mean and Variance scale linearly with time-steps to maintain mathematical consistency.
+- **Auto-Horizon:** Optimized simulation length calculated as `(2 * trains * stations) + 10`. This ensures all trains finish their routes while minimizing idle simulation steps.
+- **Instance-Aware Checkpoints:** Models are saved per-instance and noise level (e.g., `latest_model_small_3s_2t_v20.pth`). This prevents dimension mismatch errors and keeps experiments isolated.
+- **Robust Parameter Tracking:** The system tracks `num_trains`, `num_stations`, and `variance_factor` for the default instance. If parameters change, the script automatically triggers a fresh start.
+
+### 📊 Agent Interface
 - **Observation Space:** Flattened vector of timers, train states, and passenger counts.
 - **Action Space:** Discrete (0-10) minutes of additional dwell time.
 - **Reward:** Negative absolute difference between planned and actual departure times.

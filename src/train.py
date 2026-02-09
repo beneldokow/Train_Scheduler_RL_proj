@@ -4,6 +4,7 @@ import torch
 import argparse
 import pyRDDLGym
 import warnings
+import json
 from pyRDDLGym.core.visualizer.movie import MovieGenerator
 from tqdm import tqdm
 
@@ -25,12 +26,48 @@ from src.visualize_stats import create_dashboard
 
 # Argument Parser
 parser = argparse.ArgumentParser(description="Train the Scheduler RL Agent")
-parser.add_argument("--episodes", type=int, default=5000, help="Maximum number of episodes (target)")
-parser.add_argument("--additional_episodes", type=int, default=None, help="Number of additional episodes to run from current checkpoint")
-parser.add_argument("--log_interval", type=int, default=20, help="Log interval for rewards")
-parser.add_argument("--save_interval", type=int, default=50, help="Checkpoint save interval")
-parser.add_argument("--update_timestep", type=int, default=2000, help="PPO update timestep")
-parser.add_argument("--force_restart", action="store_true", help="Ignore checkpoints and start fresh")
+parser.add_argument(
+    "--episodes", type=int, default=5000, help="Maximum number of episodes (target)"
+)
+parser.add_argument(
+    "--additional_episodes",
+    type=int,
+    default=None,
+    help="Number of additional episodes to run from current checkpoint",
+)
+parser.add_argument(
+    "--log_interval", type=int, default=20, help="Log interval for rewards"
+)
+parser.add_argument(
+    "--save_interval", type=int, default=50, help="Checkpoint save interval"
+)
+parser.add_argument(
+    "--update_timestep", type=int, default=2000, help="PPO update timestep"
+)
+parser.add_argument(
+    "--force_restart", action="store_true", help="Ignore checkpoints and start fresh"
+)
+parser.add_argument(
+    "--instance_path",
+    type=str,
+    default=None,
+    help="Path to specific RDDL instance file",
+)
+parser.add_argument(
+    "--num_trains", type=int, default=3, help="Number of trains for generated instance"
+)
+parser.add_argument(
+    "--num_stations",
+    type=int,
+    default=4,
+    help="Number of stations for generated instance",
+)
+parser.add_argument(
+    "--variance_factor",
+    type=float,
+    default=0.2,
+    help="Variance factor for passenger arrivals",
+)
 args = parser.parse_args()
 
 # Configuration
@@ -39,17 +76,70 @@ RDDL_DIR = os.path.join(BASE_PATH, "rddl")
 OUTPUT_DIR = os.path.join(BASE_PATH, "output")
 TENSORBOARD_DIR = os.path.join(OUTPUT_DIR, "tensorboard")
 DOMAIN_PATH = os.path.join(RDDL_DIR, "domain.rddl")
-INSTANCE_PATH = os.path.join(RDDL_DIR, "instance.rddl")
+DEFAULT_INSTANCE_PATH = os.path.join(RDDL_DIR, "instance.rddl")
+
+checkpoint_dir = os.path.join(BASE_PATH, "checkpoints")
+os.makedirs(checkpoint_dir, exist_ok=True)
+
+# Instance Path logic
+if args.instance_path:
+    INSTANCE_PATH = args.instance_path
+    if not os.path.isabs(INSTANCE_PATH):
+        INSTANCE_PATH = os.path.join(BASE_PATH, INSTANCE_PATH)
+else:
+    INSTANCE_PATH = DEFAULT_INSTANCE_PATH
+
+# Logic to detect parameter changes for the default instance
+config_tracker_path = os.path.join(checkpoint_dir, "instance_config.json")
+current_config = {
+    "num_trains": args.num_trains,
+    "num_stations": args.num_stations,
+    "variance_factor": args.variance_factor,
+}
+
+should_force_restart = args.force_restart
+
+# Only track config for the default generated instance
+if INSTANCE_PATH == DEFAULT_INSTANCE_PATH:
+    if os.path.exists(config_tracker_path):
+        with open(config_tracker_path, "r") as f:
+            try:
+                last_config = json.load(f)
+                if last_config != current_config:
+                    print(
+                        "Detected parameter change (trains/stations/variance). Forcing fresh start..."
+                    )
+                    should_force_restart = True
+            except json.JSONDecodeError:
+                should_force_restart = True
 
 # Initialize Loggers
 logger = RewardLogger(OUTPUT_DIR)
 tb_logger = TensorboardLogger(TENSORBOARD_DIR)
 
-# 1. Generate Instance (only if missing or forced)
-if args.force_restart or not os.path.exists(INSTANCE_PATH):
-    rddl_content = generate_instance(num_trains=3, num_stations=4, horizon=50)
+# 1. Generate Instance (only if missing or forced, and only if not using specific instance_path)
+if (
+    should_force_restart or not os.path.exists(INSTANCE_PATH)
+) and not args.instance_path:
+    print(
+        f"Generating instance with {args.num_trains} trains and {args.num_stations} stations (Var Factor: {args.variance_factor})..."
+    )
+    rddl_content = generate_instance(
+        num_trains=args.num_trains,
+        num_stations=args.num_stations,
+        variance_factor=args.variance_factor,
+    )
     with open(INSTANCE_PATH, "w") as f:
         f.write(rddl_content)
+
+    # Save the config we just generated
+    if INSTANCE_PATH == DEFAULT_INSTANCE_PATH:
+        with open(config_tracker_path, "w") as f:
+            json.dump(current_config, f)
+elif args.instance_path:
+    print(f"Using provided instance: {INSTANCE_PATH}")
+else:
+    print(f"Using existing instance: {INSTANCE_PATH}")
 
 # 2. Setup Environment
 env = pyRDDLGym.make(domain=DOMAIN_PATH, instance=INSTANCE_PATH)
@@ -77,10 +167,15 @@ ppo = PPO(
 memory = Memory()
 
 # 5. Training Configuration
-checkpoint_dir = os.path.join(BASE_PATH, "checkpoints")
-os.makedirs(checkpoint_dir, exist_ok=True)
-latest_model_path = os.path.join(checkpoint_dir, "latest_model.pth")
-best_model_path = os.path.join(checkpoint_dir, "best_model.pth")
+# (Moved checkpoint_dir up)
+
+# Derive instance name for checkpointing
+instance_base = os.path.basename(INSTANCE_PATH).replace(".rddl", "")
+# Include variance in the name to distinguish noise levels
+instance_name = f"{instance_base}_v{int(args.variance_factor*100)}"
+
+latest_model_path = os.path.join(checkpoint_dir, f"latest_model_{instance_name}.pth")
+best_model_path = os.path.join(checkpoint_dir, f"best_model_{instance_name}.pth")
 
 start_episode = 1
 max_episodes = args.episodes
@@ -91,15 +186,26 @@ time_step = 0
 running_reward = 0
 best_reward = -float("inf")
 
-if not args.force_restart and os.path.exists(latest_model_path):
-    start_episode, best_reward, time_step = ppo.load_checkpoint(latest_model_path)
+# Resume logic: Check latest first, then best
+resume_path = None
+if not should_force_restart:
+    if os.path.exists(latest_model_path):
+        resume_path = latest_model_path
+    elif os.path.exists(best_model_path):
+        resume_path = best_model_path
+
+if resume_path:
+    start_episode, best_reward, time_step = ppo.load_checkpoint(resume_path)
     start_episode += 1
-    print(f"Resuming from episode {start_episode} (Best Reward: {best_reward:.2f})")
+    print(
+        f"Resuming from episode {start_episode} using {os.path.basename(resume_path)} (Best Reward: {best_reward:.2f})"
+    )
 else:
     logger.clear_log()
     # Clear old TensorBoard logs on fresh start
     if os.path.exists(TENSORBOARD_DIR):
         import shutil
+
         shutil.rmtree(TENSORBOARD_DIR)
     os.makedirs(TENSORBOARD_DIR, exist_ok=True)
 
@@ -145,14 +251,12 @@ for episode in pbar:
 
     if episode % log_interval == 0:
         avg_reward = running_reward / log_interval
-        pbar.set_postfix(
-            {"Avg Rew": f"{avg_reward:.2f}", "Best": f"{best_reward:.2f}"}
-        )
+        pbar.set_postfix({"Avg Rew": f"{avg_reward:.2f}", "Best": f"{best_reward:.2f}"})
         running_reward = 0
         logger.plot()
 
 env.close()
-logger.plot() # Final plot
+logger.plot()  # Final plot
 tb_logger.close()
 
 # Generate interactive dashboard

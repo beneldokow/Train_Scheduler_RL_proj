@@ -1,0 +1,65 @@
+non-fluents nf_simple_train_model{
+    domain = train_system;
+
+    objects{
+        train : {t1, t2};
+        station : {s1, s2, s3};
+    };
+
+    non-fluents{
+        NEXT_TRAIN(t1, t2) = true;
+        NEXT_TRAIN(t2, t1) = true;
+
+        DEPOT_STATION(s3) = true;
+
+        NEXT_STATION(s1, s2) = true;
+        FIND_NEXT_STATION(s1) = s2;
+        NEXT_STATION(s2, s3) = true;
+        FIND_NEXT_STATION(s2) = s3;
+        FIND_NEXT_STATION(s3) = s3;
+        FIRST_TRAIN = t1;
+
+        DRIVE_TIME(s1, s2) = 10;
+        DRIVE_TIME(s2, s3) = 37;
+
+        DISEMBARKING_PRECENTAGE(s1) = 0.11;
+        DISEMBARKING_PRECENTAGE(s2) = 0.39;
+        DISEMBARKING_PRECENTAGE(s3) = 0.50;
+
+        PASSENGER_ARRIVAL_RATE(s1) = 5.0;
+        PASSENGER_ARRIVAL_VAR(s1) = 1.0;
+        PASSENGER_ARRIVAL_RATE(s2) = 7.0;
+        PASSENGER_ARRIVAL_VAR(s2) = 1.4;
+        PASSENGER_ARRIVAL_RATE(s3) = 0.0;
+        PASSENGER_ARRIVAL_VAR(s3) = 0.0;
+
+        PLANNED_DEPARTURE_TIME(t1, s1) = 11;
+        PLANNED_DEPARTURE_TIME(t1, s2) = 23;
+        PLANNED_DEPARTURE_TIME(t1, s3) = 62;
+        PLANNED_DEPARTURE_TIME(t2, s1) = 42;
+        PLANNED_DEPARTURE_TIME(t2, s2) = 55;
+        PLANNED_DEPARTURE_TIME(t2, s3) = 95;
+
+    };
+}
+
+instance simple_train_model{
+    domain = train_system;
+    non-fluents = nf_simple_train_model;
+
+    init-state{
+        train_timer(t1) = 10;
+        train_timer(t2) = 40;
+
+        current_state(t1) = 0;
+        current_station(t1) = s1;
+        current_state(t2) = 0;
+        current_station(t2) = s1;
+    };
+
+    max-nondef-actions = pos-inf;
+    horizon = 22;
+    discount = 1.0;
+
+}
+

@@ -29,7 +29,8 @@ domain train_system {
         DRIVE_TIME(station, station): {non-fluent, real, default=0.0};
         FIND_NEXT_STATION(station): {non-fluent, station};
         DISEMBARKING_PRECENTAGE(station): {non-fluent, real, default=0.2};
-        PASSENGER_ARRIVAL_RATE(station): {non-fluent, int, default=6};
+        PASSENGER_ARRIVAL_RATE(station): {non-fluent, real, default=6.0};
+        PASSENGER_ARRIVAL_VAR(station): {non-fluent, real, default=1.0};
         PLANNED_DEPARTURE_TIME(train, station): {non-fluent, real, default=0.0};
 
         //timing constants
@@ -98,9 +99,11 @@ domain train_system {
                                 if(DEPOT_STATION(?s))
                                     then 0
                                 else if(exists_{?t: train} [current_station(?t) == ?s ^ current_state(?t) == TRAIN_IN_ROUTE ^ train_timer(?t) == global_timer()])
-                                    then passengers_at_station(?s) + PASSENGER_ARRIVAL_RATE(?s) -
-                                      sum_{?t: train} [(current_station(?t) == ?s ^ current_state(?t) == TRAIN_ACTIVE) * people_boarding_calc(?t,?s)]
-                                else passengers_at_station(?s) + PASSENGER_ARRIVAL_RATE(?s);
+                                    then max[0, passengers_at_station(?s) + 
+                                         round[max[0, Normal(PASSENGER_ARRIVAL_RATE(?s) * global_timer(), PASSENGER_ARRIVAL_VAR(?s) * global_timer())]] -
+                                         sum_{?t: train} [(current_station(?t) == ?s ^ current_state(?t) == TRAIN_ACTIVE) * people_boarding_calc(?t,?s)]]
+                                else max[0, passengers_at_station(?s) + 
+                                     round[max[0, Normal(PASSENGER_ARRIVAL_RATE(?s) * global_timer(), PASSENGER_ARRIVAL_VAR(?s) * global_timer())]]];
 
         passengers_on_train'(?t) =
                                 if(exists_{?s: station} [(current_station(?t) == ?s ^ current_state(?t) == TRAIN_ACTIVE) ^ train_timer(?t) == global_timer()])

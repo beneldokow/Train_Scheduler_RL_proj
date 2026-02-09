@@ -5,11 +5,12 @@ import math
 def generate_instance(
     num_trains,
     num_stations,
-    horizon,
+    horizon=None,
     interval=30,
     start_delay=10,
     train_capacity=1000,
     boarding_speed=75,
+    variance_factor=0.2,
 ):
 
     if num_trains < 2 or num_stations < 2:
@@ -41,11 +42,16 @@ def generate_instance(
     # Passenger Arrival Rates
     # Last station (Depot) gets 0 arrival rate. s1 gets a normal random rate.
     passenger_arrival_rates = {}
+    passenger_arrival_vars = {}
     for i, station in enumerate(stations):
         if i == len(stations) - 1:  # Last station
-            passenger_arrival_rates[station] = 0
+            passenger_arrival_rates[station] = 0.0
+            passenger_arrival_vars[station] = 0.0
         else:
-            passenger_arrival_rates[station] = random.randint(2, 8)
+            rate = random.randint(2, 8)
+            passenger_arrival_rates[station] = float(rate)
+            # Variance set based on variance_factor for controlled stochasticity
+            passenger_arrival_vars[station] = float(rate) * variance_factor
 
     # --- SIMULATION START ---
     planned_departures = {}
@@ -118,6 +124,10 @@ def generate_instance(
             station_free_time[station] = departure_time
             natural_arrival_time = departure_time
 
+    if horizon is None:
+        # tight but safe horizon: 2 steps per station per train + buffer
+        horizon = num_trains * num_stations * 2 + 10
+
     # --- OUTPUT GENERATION ---
     output = []
     output.append("non-fluents nf_simple_train_model{\n")
@@ -156,7 +166,10 @@ def generate_instance(
 
     output.append("\n")
     for station, rate in passenger_arrival_rates.items():
-        output.append(f"        PASSENGER_ARRIVAL_RATE({station}) = {rate};\n")
+        output.append(f"        PASSENGER_ARRIVAL_RATE({station}) = {rate:.1f};\n")
+        output.append(
+            f"        PASSENGER_ARRIVAL_VAR({station}) = {passenger_arrival_vars[station]:.1f};\n"
+        )
 
     output.append("\n")
     for (train, station), time in planned_departures.items():
@@ -187,6 +200,3 @@ def generate_instance(
     output.append("}\n")
 
     return "".join(output)
-
-
-pass

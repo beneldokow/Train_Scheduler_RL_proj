@@ -80,8 +80,36 @@ source "$VENV_DIR/bin/activate"
 echo "Verifying dependencies..."
 pip install -q -r requirements.txt
 
-# Run the training script with all passed arguments
-python3 src/train.py "$@"
+# Argument preprocessing for convenience
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --reuse)
+      if [ -n "$2" ] && [[ ! "$2" == --* ]]; then
+        INSTANCE_NAME="$2"
+        shift 2
+      else
+        echo "Available reused instances:"
+        ls -1 rddl/instances/ | sed 's/\.rddl$//'
+        echo "Enter instance name:"
+        read -r INSTANCE_NAME
+        shift
+      fi
+      ARGS+=("--instance_path" "rddl/instances/${INSTANCE_NAME}.rddl")
+      ;;
+    --instance)
+      ARGS+=("--instance_path" "rddl/instances/$2.rddl")
+      shift 2
+      ;;
+    *)
+      ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Run the training script with processed arguments
+python3 src/train.py "${ARGS[@]}"
 
 if [ $? -eq 0 ]; then
     echo "------------------------------------------------"

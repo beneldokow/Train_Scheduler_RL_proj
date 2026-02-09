@@ -109,32 +109,42 @@ class PPO:
             surr2 = (
                 torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
             )
-            
+
             actor_loss = -torch.min(surr1, surr2)
             critic_loss = 0.5 * self.MseLoss(state_values, rewards)
             entropy_loss = -0.01 * dist_entropy
-            
+
             loss = actor_loss + critic_loss + entropy_loss
-            
+
             self.optimizer.zero_grad()
             loss.mean().backward()
-            
+
             if logger and epoch == self.K_epochs - 1:
                 # Log metrics for the last epoch of the update
                 with torch.no_grad():
                     approx_kl = (old_logprobs - logprobs).mean()
                     clip_frac = (torch.abs(ratios - 1) > self.eps_clip).float().mean()
-                
+
                 logger.log_scalar("loss/total", loss.mean().item(), self.update_count)
-                logger.log_scalar("loss/actor", actor_loss.mean().item(), self.update_count)
-                logger.log_scalar("loss/critic", critic_loss.mean().item(), self.update_count)
-                logger.log_scalar("loss/entropy", dist_entropy.mean().item(), self.update_count)
-                logger.log_scalar("stats/approx_kl", approx_kl.item(), self.update_count)
-                logger.log_scalar("stats/clip_fraction", clip_frac.item(), self.update_count)
+                logger.log_scalar(
+                    "loss/actor", actor_loss.mean().item(), self.update_count
+                )
+                logger.log_scalar(
+                    "loss/critic", critic_loss.mean().item(), self.update_count
+                )
+                logger.log_scalar(
+                    "loss/entropy", dist_entropy.mean().item(), self.update_count
+                )
+                logger.log_scalar(
+                    "stats/approx_kl", approx_kl.item(), self.update_count
+                )
+                logger.log_scalar(
+                    "stats/clip_fraction", clip_frac.item(), self.update_count
+                )
                 logger.log_model_stats(self.policy, self.update_count)
 
             self.optimizer.step()
-        
+
         self.update_count += 1
         self.policy_old.load_state_dict(self.policy.state_dict())
 
