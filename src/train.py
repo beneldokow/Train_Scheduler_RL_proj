@@ -73,6 +73,7 @@ args = parser.parse_args()
 # Configuration
 # BASE_PATH is already defined above
 RDDL_DIR = os.path.join(BASE_PATH, "rddl")
+os.makedirs(RDDL_DIR, exist_ok=True)
 OUTPUT_DIR = os.path.join(BASE_PATH, "output")
 TENSORBOARD_DIR = os.path.join(OUTPUT_DIR, "tensorboard")
 DOMAIN_PATH = os.path.join(RDDL_DIR, "domain.rddl")

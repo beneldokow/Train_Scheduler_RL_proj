@@ -98,7 +98,11 @@ while [[ $# -gt 0 ]]; do
         shift 2
       else
         echo "Available reused instances:"
-        ls -1 rddl/instances/ | sed 's/\.rddl$//'
+        if [ -d "rddl/instances" ]; then
+          ls -1 rddl/instances/ | sed 's/\.rddl$//'
+        else
+          echo "(None found in rddl/instances/)"
+        fi
         echo "Enter instance name:"
         read -r INSTANCE_NAME
         shift
