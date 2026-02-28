@@ -1,29 +1,40 @@
 #!/bin/bash
 
+# Train Scheduler RL - Unified Entry Point Script
+# 
+# Responsibilities:
+# 1. Environment Management: Automatically creates and activates a Python virtual environment.
+# 2. Dependency Sync: Ensures 'pip' and project requirements are up-to-date on every run.
+# 3. Filesystem Resilience: Detects restricted environments (like Google Drive) and redirects 
+#    the virtual environment to a safe local path (~/venv_train_scheduler_rl) to avoid symlink errors.
+# 4. Interactive Helpers: Simplifies complex flags (e.g., provides a list for --reuse).
+# 5. Main Execution: Launches 'src/train.py' with processed arguments.
+
 # Configuration
-VENV_PATH_FILE=".venv_path"
+VENV_PATH_FILE=".venv_path" # Persistent file to remember the external venv location
 VENV_DIR=""
 
-# 0. Pre-flight Check
+# 0. Pre-flight Check: Verify Python 3 is installed
 if ! command -v python3 &> /dev/null; then
     echo "Error: python3 is not installed. Please install it first (e.g., sudo apt install python3)."
     exit 1
 fi
 
-# Function to check if a venv is actually valid and functional
+# Function: is_venv_valid
+# Checks if a directory contains a functional Python virtual environment.
 is_venv_valid() {
     local dir="$1"
     if [ -d "$dir" ] && [ -f "$dir/bin/activate" ] && [ -f "$dir/bin/python3" ]; then
-        # Check if it's on a restricted filesystem (Google Drive)
+        # Google Drive does not support symlinks, which breaks venv functionality.
         if [[ "$dir" == /mnt/chromeos/GoogleDrive/* ]]; then
-            return 1 # Invalid because it's on Drive (symlinks will fail)
+            return 1 
         fi
         return 0
     fi
     return 1
 }
 
-# 1. Check for saved venv path
+# 1. Resolve Environment: Check saved path first
 if [ -f "$VENV_PATH_FILE" ]; then
     VENV_DIR=$(cat "$VENV_PATH_FILE")
     if ! is_venv_valid "$VENV_DIR"; then
@@ -32,16 +43,15 @@ if [ -f "$VENV_PATH_FILE" ]; then
     fi
 fi
 
-# 2. Check for local 'venv' folder
+# 2. Resolve Environment: Check for local 'venv' folder
 if [ -z "$VENV_DIR" ] && is_venv_valid "venv"; then
     VENV_DIR="venv"
 fi
 
-# 3. Setup venv if not found
+# 3. Environment Setup Flow
 if [ -z "$VENV_DIR" ]; then
     echo "No valid virtual environment found."
 
-    # Detect Google Drive / Restricted filesystem
     CURRENT_DIR=$(pwd)
     if [[ "$CURRENT_DIR" == /mnt/chromeos/GoogleDrive/* ]]; then
         echo "Detected Google Drive. Local virtual environments are not supported here due to symlink restrictions."
@@ -64,7 +74,7 @@ if [ -z "$VENV_DIR" ]; then
             echo "------------------------------------------------"
             echo "Failed to create virtual environment."
             echo "This usually means the 'python3-venv' package is missing."
-            echo "Try running: sudo apt update && sudo apt install python3-venv python3-pip"
+            echo "Fix: sudo apt update && sudo apt install python3-venv python3-pip"
             echo "------------------------------------------------"
             exit 1
         fi
@@ -82,13 +92,13 @@ if [ -z "$VENV_DIR" ]; then
     fi
 fi
 
-# 4. Activate & Verify Dependencies
+# 4. Activation & Verification
 source "$VENV_DIR/bin/activate"
 echo "Verifying dependencies..."
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
 
-# 5. Argument Processing
+# 5. Argument Preprocessing
 ARGS=()
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -120,7 +130,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# 6. Run Training
+# 6. Main Execution
 python3 src/train.py "${ARGS[@]}"
 
 if [ $? -eq 0 ]; then

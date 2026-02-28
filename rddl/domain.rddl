@@ -1,3 +1,21 @@
+///////////////////////////////////////////////////////////////////////////////
+// Train Scheduler RL Domain
+// 
+// Description:
+// This domain simulates a rail network where multiple trains move through a sequence of stations.
+// The objective is to minimize deviations from a planned departure schedule.
+// 
+// Physics & Logic:
+// - Trains move between stations (DRIVE_TIME).
+// - At each station, passengers arrive following a Normal distribution (PASSENGER_ARRIVAL_RATE).
+// - Boarding and disembarking times are calculated based on passenger volume (PASSENGERS_BOARDING_PER_MINUTE).
+// - A global "Absolute Clock" (current_time) tracks simulation time.
+// - The agent controls "wait" actions (additional dwell time) to align departures with the schedule.
+// 
+// Reward Function:
+// - The reward is the negative absolute difference between the actual departure time 
+//   and the PLANNED_DEPARTURE_TIME for each train at each station.
+///////////////////////////////////////////////////////////////////////////////
 domain train_system {
 
     requirements = {
@@ -14,87 +32,90 @@ domain train_system {
 
     pvariables{
 
-        //train constants
+        // --- Train Constants ---
         CAPACITY(train): {non-fluent, int, default=1000};
         PASSENGERS_BOARDING_PER_MINUTE(train): {non-fluent, int, default=75};
         PASSENGERS_DISEMBARKING_PER_MINUTE(train): {non-fluent, int, default=75};
-        NEXT_TRAIN(train, train): {non-fluent, bool, default=false};
-        MIN_STOP_TIME(train): {non-fluent, real, default=2.0};
+        NEXT_TRAIN(train, train): {non-fluent, bool, default=false}; // Defines order in queue
+        MIN_STOP_TIME(train): {non-fluent, real, default=2.0};        // Base time for door operations
 
-        //station constants
+        // --- Station Constants ---
         INF : {non-fluent, real, default=1000000.0};
         FIRST_TRAIN : {non-fluent, train};
-        DEPOT_STATION(station): {non-fluent, bool, default=false};
+        DEPOT_STATION(station): {non-fluent, bool, default=false};   // Final destination
         NEXT_STATION(station, station): {non-fluent, bool, default=false};
         DRIVE_TIME(station, station): {non-fluent, real, default=0.0};
         FIND_NEXT_STATION(station): {non-fluent, station};
-        DISEMBARKING_PRECENTAGE(station): {non-fluent, real, default=0.2};
-        PASSENGER_ARRIVAL_RATE(station): {non-fluent, real, default=6.0};
-        PASSENGER_ARRIVAL_VAR(station): {non-fluent, real, default=1.0};
+        DISEMBARKING_PRECENTAGE(station): {non-fluent, real, default=0.2}; // % of passengers getting off
+        PASSENGER_ARRIVAL_RATE(station): {non-fluent, real, default=6.0};  // Mean arrivals per minute
+        PASSENGER_ARRIVAL_VAR(station): {non-fluent, real, default=1.0};   // Variance of arrivals
         PLANNED_DEPARTURE_TIME(train, station): {non-fluent, real, default=0.0};
 
-        //timing constants
-        SCHEDULED_DEPARTURE_TIME(train, station): {non-fluent, real, default=0.0};
-
-        //timer variables
+        // --- State Variables ---
+        
+        // Timer variables: tracks time remaining for the current state (e.g., remaining drive time)
         train_timer(train): {state-fluent, real, default=0.0};
 
-        // --- NEW: Absolute Clock ---
+        // Absolute Clock: Tracks the total time elapsed in the simulation
         current_time: {state-fluent, real, default=0.0};
 
-        //interm fluent
-        active_time_calc(train): {interm-fluent, real};
+        // Passenger state
+        passengers_at_station(station): {state-fluent, real, default=0};
+        passengers_on_train(train): {state-fluent, real, default=0};
+
+        // Train tracking
+        train_num_at_queue(train): {state-fluent, real, default=-1}; // -1 if not in queue
+        current_station(train): {state-fluent, station};
+        current_state(train): {state-fluent, int, default=0};
+
+        // --- Action Fluents ---
+        // The agent decides how many additional minutes to wait at a station
+        wait(station): {action-fluent, int, default=0};
+
+        // --- Intermediate Nodes (Logic helper variables) ---
+        active_time_calc(train): {interm-fluent, real};              // Time required for boarding/disembarking
         people_boarding_calc(train, station): {interm-fluent, real};
         people_disembarking_calc(train, station): {interm-fluent, real};
         entering_empty_queue(train): {interm-fluent, bool};
         leaving_queue(train): {interm-fluent, bool};
-        global_timer: {interm-fluent, real};
+        global_timer: {interm-fluent, real};                         // Min time until next event across all trains
+        delay(train) : {interm-fluent, int};                         // Maps station action to specific train
 
-        // train state enum
-        TRAIN_IN_ROUTE   : {non-fluent, int, default=0};
-        TRAIN_IN_QUEUE   : {non-fluent, int, default=1};
-        TRAIN_WAITING    : {non-fluent, int, default=2};
-        TRAIN_ACTIVE     : {non-fluent, int, default=3};
-        TRAIN_FINISHED   : {non-fluent, int, default=4};
-
-        //state variables - passengers
-        passengers_at_station(station): {state-fluent, real, default=0};
-        passengers_on_train(train): {state-fluent, real, default=0};
-
-        //state variables - train states
-        train_num_at_queue(train): {state-fluent, real, default=-1};
-        current_station(train): {state-fluent, station};
-        current_state(train): {state-fluent, int, default=0};
-
-        //actions (RENAMED from wait_action -> wait)
-        wait(station): {action-fluent, int, default=0};
-
-        //action-interm (RENAMED from wait -> delay)
-        delay(train) : {interm-fluent, int};
+        // Train state enum definitions
+        TRAIN_IN_ROUTE   : {non-fluent, int, default=0}; // Moving between stations
+        TRAIN_IN_QUEUE   : {non-fluent, int, default=1}; // Waiting for station to be clear
+        TRAIN_WAITING    : {non-fluent, int, default=2}; // Waiting as instructed by agent (delay)
+        TRAIN_ACTIVE     : {non-fluent, int, default=3}; // Boarding/Disembarking
+        TRAIN_FINISHED   : {non-fluent, int, default=4}; // Reached depot
     };
 
     cpfs {
 
-        // (RENAMED: delay depends on wait)
+        // Logic mapping: The delay for a train is the 'wait' action at its current station
         delay(?t) = wait(current_station(?t));
 
+        // Global Event Step: We jump to the next interesting event (Discrete Event Simulation style)
         global_timer() = min_{?t: train} [train_timer(?t)];
 
+        // Increment absolute clock
         current_time'() = current_time() + global_timer();
 
         leaving_queue(?t) =  current_state(?t) == TRAIN_ACTIVE ^ train_timer(?t) == global_timer();
 
         entering_empty_queue(?t) = (FIRST_TRAIN == ?t) | exists_{?t2: train} [NEXT_TRAIN(?t2,?t) ^ ((leaving_queue(?t2) ^ (current_station(?t) == current_station(?t2))) | ~(current_station(?t) == current_station(?t2)))];
 
+        // Passenger flow calculations
         people_disembarking_calc(?t,?s) = floor[DISEMBARKING_PRECENTAGE(?s) * passengers_on_train(?t)];
 
         people_boarding_calc(?t,?s) = abs[min[CAPACITY(?t) - passengers_on_train(?t) + people_disembarking_calc(?t,?s), passengers_at_station(?s)]];
 
+        // Boarding time is proportional to passenger volume
         active_time_calc(?t) = max[MIN_STOP_TIME(?t),
                                    ceil[sum_{?s: station}[[current_station(?t) == ?s ^ (current_state(?t) == TRAIN_WAITING | current_state(?t) == TRAIN_IN_ROUTE)] *
                                            [people_disembarking_calc(?t,?s) + people_boarding_calc(?t,?s)] /
                                             PASSENGERS_DISEMBARKING_PER_MINUTE(?t)]]];
 
+        // Stochastic passenger arrivals (Scaling mean/var with global_timer)
         passengers_at_station'(?s) =
                                 if(DEPOT_STATION(?s))
                                     then 0
@@ -112,6 +133,7 @@ domain train_system {
                                                          [people_boarding_calc(?t,?s) - people_disembarking_calc(?t,?s)]]
                                 else passengers_on_train(?t);
 
+        // State Transition Logic (FSM)
         current_state'(?t) =
                               if(current_state(?t) == TRAIN_FINISHED)
                                     then TRAIN_FINISHED
@@ -119,8 +141,6 @@ domain train_system {
                                     then TRAIN_FINISHED
                               else if(current_state(?t) == TRAIN_ACTIVE ^ (train_timer(?t) == global_timer()))
                                     then TRAIN_IN_ROUTE
-
-                              // (RENAMED wait -> delay)
                               else if(current_state(?t) == TRAIN_IN_ROUTE ^ (train_timer(?t) == global_timer()) ^ (delay(?t) > 0) ^ entering_empty_queue(?t))
                                     then TRAIN_WAITING
                               else if((current_state(?t) == TRAIN_IN_QUEUE) ^ delay(?t) > 0 ^
@@ -160,10 +180,10 @@ domain train_system {
                                         then -1.0
                                     else train_num_at_queue(?t);
 
+        // Timer Update Logic: Determines the duration of the next state
         train_timer'(?t) =
                     if(current_state(?t) == TRAIN_FINISHED | exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_IN_ROUTE) ^ (train_timer(?t) == global_timer()) ^ DEPOT_STATION(?s)])
                       then INF
-                    // (RENAMED wait -> delay)
                     else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (current_state(?t) == TRAIN_IN_ROUTE) ^ (train_timer(?t) == global_timer()) ^ (delay(?t) == 0) ^ entering_empty_queue(?t)])
                       then active_time_calc(?t)
                     else if(exists_{?s: station} [(current_station(?t) == ?s) ^ (train_num_at_queue(?t) == 1) ^ (delay(?t) == 0) ^
@@ -182,13 +202,14 @@ domain train_system {
 
     };
 
+// Objective: Minimize total absolute schedule deviation
 reward = -1 * abs[sum_{?t: train} [
         (current_state(?t) == TRAIN_ACTIVE ^ train_timer(?t) == global_timer()) *
         (PLANNED_DEPARTURE_TIME(?t, current_station(?t)) - (current_time + global_timer()))
     ]];
 
 action-preconditions {
-          // (RENAMED wait_action -> wait)
+          // Actions are constrained to 0-10 minutes of extra wait time
           forall_{?s : station} wait(?s) >= 0;
           forall_{?s : station} wait(?s) <= 10;
       };
