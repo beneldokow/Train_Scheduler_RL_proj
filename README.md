@@ -22,34 +22,14 @@ git clone git@github.com:beneldokow/Train_Scheduler_RL_proj.git
 cd Train_Scheduler_RL_proj
 ```
 
-### 2. Set up a Virtual Environment (Recommended)
-This avoids conflicts with system-level Python packages.
-
-**On Linux/macOS:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-**On Windows:**
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 4. Run Training
-You can use the helper script to run the training without manually activating the virtual environment.
+### 2. Run Training (Automated Setup)
+The project includes a `run.sh` script that handles virtual environment creation and dependency management automatically, even on restricted filesystems like Google Drive.
 
 **Basic Run:**
 ```bash
 ./run.sh
 ```
+*Note: The first run will prompt you to create a virtual environment if one is not detected.*
 
 **Run with Custom Arguments:**
 ```bash
@@ -57,26 +37,42 @@ You can use the helper script to run the training without manually activating th
 ./run.sh --episodes 1000 --log_interval 10 --force_restart
 ```
 
-**Available Arguments:**
+### 3. Monitoring & Visualization
+
+#### Interactive Dashboard
+After each training run, an interactive HTML dashboard is generated:
+- **Path:** `output/training_dashboard.html`
+- **Features:** Plotly-based reward tracking, episode stats, and training configuration.
+
+#### TensorBoard
+Real-time metrics are logged to TensorBoard:
+```bash
+tensorboard --logdir output/tensorboard
+```
+
+#### Episode Visualizations
+GIFs of agent behavior are saved to `output/visualizations/` periodically.
+
+---
+
+## 🛠 Available Arguments
 - `--episodes`: Maximum number of episodes (target) (default: 5000).
 - `--additional_episodes`: Number of additional episodes to run from current checkpoint.
 - `--log_interval`: How often to update the log/plot (default: 20).
 - `--save_interval`: How often to save checkpoints (default: 50).
 - `--force_restart`: Ignore existing checkpoints and start training from scratch.
-- `--reuse [<name>]`: (run.sh only) Use a pre-existing instance from `rddl/instances/`. If `<name>` is omitted, it lists available instances.
+- `--reuse [<name>]`: (run.sh only) Use a pre-existing instance from `rddl/instances/`.
 - `--instance_path <path>`: Run with a specific RDDL instance file path.
 - `--num_trains`: Number of trains for generated instance (default: 3).
 - `--num_stations`: Number of stations for generated instance (default: 4).
 - `--variance_factor`: Controls randomness of passenger arrivals (default: 0.2).
 
-## 🧠 Domain Logic
-The simulation runs on a custom RDDL domain where trains move between stations. The agent sets a `wait` time (0-10 minutes) at each station to minimize schedule deviation.
-
-### 🌟 Key Features
-- **Stochastic Arrivals:** Passenger arrivals follow a Normal distribution: `round[max[0, Normal(mean, var)]]`. Mean and Variance scale linearly with time-steps to maintain mathematical consistency.
-- **Auto-Horizon:** Optimized simulation length calculated as `(2 * trains * stations) + 10`. This ensures all trains finish their routes while minimizing idle simulation steps.
-- **Instance-Aware Checkpoints:** Models are saved per-instance and noise level (e.g., `latest_model_small_3s_2t_v20.pth`). This prevents dimension mismatch errors and keeps experiments isolated.
-- **Robust Parameter Tracking:** The system tracks `num_trains`, `num_stations`, and `variance_factor` for the default instance. If parameters change, the script automatically triggers a fresh start.
+## 🧠 Domain Logic & Features
+- **Stochastic Arrivals:** Passenger arrivals follow a Normal distribution that scales with time-steps for consistency.
+- **Auto-Horizon:** Optimized simulation length calculated as `(2 * trains * stations) + 10`.
+- **Instance-Aware Checkpoints:** Models are saved per-instance and variance level (e.g., `latest_model_small_3s_2t_v20.pth`).
+- **Parameter Tracking:** If `num_trains`, `num_stations`, or `variance_factor` change, the system automatically triggers a fresh start to avoid dimension mismatches.
+- **Robust Venv Management:** `run.sh` saves the path to your functional venv in `.venv_path`, allowing it to reside outside of Google Drive for better performance and reliability.
 
 ### 📊 Agent Interface
 - **Observation Space:** Flattened vector of timers, train states, and passenger counts.
