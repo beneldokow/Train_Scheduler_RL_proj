@@ -1,7 +1,14 @@
 #!/bin/bash
 
+# Configuration
 VENV_PATH_FILE=".venv_path"
 VENV_DIR=""
+
+# 0. Pre-flight Check
+if ! command -v python3 &> /dev/null; then
+    echo "Error: python3 is not installed. Please install it first (e.g., sudo apt install python3)."
+    exit 1
+fi
 
 # Function to check if a venv is actually valid and functional
 is_venv_valid() {
@@ -16,7 +23,7 @@ is_venv_valid() {
     return 1
 }
 
-# 1. Check if we already have a path saved
+# 1. Check for saved venv path
 if [ -f "$VENV_PATH_FILE" ]; then
     VENV_DIR=$(cat "$VENV_PATH_FILE")
     if ! is_venv_valid "$VENV_DIR"; then
@@ -25,15 +32,15 @@ if [ -f "$VENV_PATH_FILE" ]; then
     fi
 fi
 
-# 2. Check if local venv exists and use it if valid
+# 2. Check for local 'venv' folder
 if [ -z "$VENV_DIR" ] && is_venv_valid "venv"; then
     VENV_DIR="venv"
 fi
 
-# 3. If no venv found or the saved one is invalid, help the user
+# 3. Setup venv if not found
 if [ -z "$VENV_DIR" ]; then
     echo "No valid virtual environment found."
-    
+
     # Detect Google Drive / Restricted filesystem
     CURRENT_DIR=$(pwd)
     if [[ "$CURRENT_DIR" == /mnt/chromeos/GoogleDrive/* ]]; then
@@ -47,7 +54,6 @@ if [ -z "$VENV_DIR" ]; then
     read -r response
     if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
         echo "Creating virtual environment..."
-        # Ensure parent directory exists
         mkdir -p "$(dirname "$DEFAULT_VENV")"
         python3 -m venv "$DEFAULT_VENV"
         if [ $? -eq 0 ]; then
@@ -55,7 +61,11 @@ if [ -z "$VENV_DIR" ]; then
             echo "$VENV_DIR" > "$VENV_PATH_FILE"
             echo "Virtual environment created at $VENV_DIR"
         else
-            echo "Failed to create virtual environment. Please create one manually and put its path in $VENV_PATH_FILE"
+            echo "------------------------------------------------"
+            echo "Failed to create virtual environment."
+            echo "This usually means the 'python3-venv' package is missing."
+            echo "Try running: sudo apt update && sudo apt install python3-venv python3-pip"
+            echo "------------------------------------------------"
             exit 1
         fi
     else
@@ -66,21 +76,19 @@ if [ -z "$VENV_DIR" ]; then
             VENV_DIR="$custom_path"
             echo "$VENV_DIR" > "$VENV_PATH_FILE"
         else
-            echo "Error: The path '$custom_path' is not a valid virtual environment or is on an unsupported filesystem."
+            echo "Error: The path '$custom_path' is not a valid virtual environment."
             exit 1
         fi
     fi
 fi
 
-# Activate
+# 4. Activate & Verify Dependencies
 source "$VENV_DIR/bin/activate"
-
-# 4. ROBUSTNESS: Check and install missing dependencies
-# This ensures that even if the venv exists, it has everything it needs
 echo "Verifying dependencies..."
+pip install -q --upgrade pip
 pip install -q -r requirements.txt
 
-# Argument preprocessing for convenience
+# 5. Argument Processing
 ARGS=()
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -108,7 +116,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Run the training script with processed arguments
+# 6. Run Training
 python3 src/train.py "${ARGS[@]}"
 
 if [ $? -eq 0 ]; then
