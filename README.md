@@ -2,17 +2,30 @@
 
 This project uses Reinforcement Learning (PPO) to optimize train dwell times in a simulated rail system using **pyRDDLGym**.
 
+## 🎯 Review Quick Summary (The "Elevator Pitch")
+This project tackles the **Train Scheduling Optimization** problem using **Deep Reinforcement Learning (PPO)**. 
+- **Problem:** Dynamic passenger arrivals cause delays that ripple through the network.
+- **Goal:** Minimize station wait times and departure delays across a multi-station, multi-train system.
+- **Innovation:** Uses **RDDL (Relational Dynamic Bayesian Networks)** for robust environment modeling and a custom **PPO (Proximal Policy Optimization)** agent for decision-making.
+
+## 🧠 Algorithm Technicals (Deep Dive)
+The core learning logic is implemented in `src/agent.py` using **PPO with Clipped Objective**:
+- **Policy Network:** An Actor-Critic architecture that outputs discrete dwell-time actions.
+- **Optimization:** Uses **Monte Carlo returns** for advantage estimation, providing an unbiased signal for policy updates.
+- **Robustness:** Includes **Entropy Regularization** to encourage exploration and prevent premature convergence.
+- **Normalization:** Observations are pre-processed through a normalization layer to ensure stable training across different station/train counts.
+
 ## 📁 Project Structure
 - `src/`: Core Python logic.
   - `train.py`: Main training loop.
   - `agent.py`: PPO implementation.
   - `wrappers.py`: Environment wrappers for skipping and vectorization.
   - `generator.py`: RDDL instance generator.
-  - `visualizer.py`: Custom Matplotlib visualizer.
-- `src/logger.py`: Reward logging and plotting utilities.
+  - `visualizer.py`: Custom Matplotlib visualizer for episode GIFs.
+  - `logger.py`: TensorBoard and CSV reward logging utilities.
 - `rddl/`: RDDL domain and instance files.
 - `checkpoints/`: Saved model weights (git-ignored).
-- `output/`: Visualization outputs, gifs, and reward plots (git-ignored).
+- `output/`: Visualization outputs, gifs, and TensorBoard logs (git-ignored).
 
 ## 🚀 Getting Started
 
@@ -39,26 +52,23 @@ The project includes a `run.sh` script that handles virtual environment creation
 
 ### 3. Monitoring & Visualization
 
-#### Interactive Dashboard
-After each training run, an interactive HTML dashboard is generated:
-- **Path:** `output/training_dashboard.html`
-- **Features:** Plotly-based reward tracking, episode stats, and training configuration.
+#### TensorBoard (Primary Dashboard)
+Real-time metrics, including episode rewards, actor/critic losses, and parameter distributions, are logged to TensorBoard. The `run.sh` script automatically launches the dashboard after training.
 
-#### TensorBoard
-Real-time metrics are logged to TensorBoard:
+**Manual Launch:**
 ```bash
 tensorboard --logdir output/tensorboard
 ```
 
 #### Episode Visualizations
-GIFs of agent behavior are saved to `output/visualizations/` periodically.
+GIFs of agent behavior are saved to `output/visualizations/` periodically, showing real-time train movement and station crowding.
 
 ---
 
 ## 🛠 Available Arguments
 - `--episodes`: Maximum number of episodes (target) (default: 5000).
 - `--additional_episodes`: Number of additional episodes to run from current checkpoint.
-- `--log_interval`: How often to update the log/plot (default: 20).
+- `--log_interval`: How often to update the log (default: 20).
 - `--save_interval`: How often to save checkpoints (default: 50).
 - `--force_restart`: Ignore existing checkpoints and start training from scratch.
 - `--reuse [<name>]`: (run.sh only) Use a pre-existing instance from `rddl/instances/`.

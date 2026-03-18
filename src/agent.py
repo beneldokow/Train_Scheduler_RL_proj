@@ -97,7 +97,7 @@ class PPO:
         
         # Current policy being optimized
         self.policy = ActorCritic(state_dim, action_dim, 64).to(device)
-        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr, betas=betas)
+        self.optimizer = torch.optim.RMSprop(self.policy.parameters(), lr=lr, alpha=0.99, eps=1e-5)
         
         # Old policy used to calculate the probability ratio r(theta)
         self.policy_old = ActorCritic(state_dim, action_dim, 64).to(device)
@@ -111,9 +111,12 @@ class PPO:
         return self.policy_old.act(state, memory)
 
     def update(self, memory, logger=None):
-        """Perform a PPO update using the collected transitions."""
+        """
+        PPO Update: Optimizes the Actor-Critic networks using collected experience.
+        The core of PPO: Clipped surrogate objective + Value Loss + Entropy Bonus.
+        """
         
-        # 1. Monte Carlo estimate of discounted rewards (returns)
+        # 1. Compute 'Returns': The discounted sum of future rewards (Monte Carlo)
         rewards = []
         discounted_reward = 0
         for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminals)):
@@ -122,35 +125,36 @@ class PPO:
             discounted_reward = reward + (self.gamma * discounted_reward)
             rewards.insert(0, discounted_reward)
         
-        # Normalizing the rewards for stability
+        # Normalizing rewards stabilizes training by keeping gradients at a consistent scale
         rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
         
-        # Convert list of tensors in memory to single tensors
+        # Convert lists to tensors for batch processing on GPU/CPU
         old_states = torch.stack(memory.states).to(device).detach()
         old_actions = torch.stack(memory.actions).to(device).detach()
         old_logprobs = torch.stack(memory.logprobs).to(device).detach()
 
-        # 2. Optimization Loop (K_epochs)
+        # 2. Optimization Loop: PPO reuses the same data for K epochs for efficiency
         for epoch in range(self.K_epochs):
-            # Evaluating old actions and states with the current policy
+            # Evaluate the current batch under the *new* (changing) policy
             logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
             
-            # Probability Ratio: r(theta) = pi_theta(a|s) / pi_theta_old(a|s)
+            # Probability Ratio: How much the policy has changed since data collection
+            # ratio = exp(new_logprob - old_logprob)
             ratios = torch.exp(logprobs - old_logprobs.detach())
             
-            # Advantage Estimation: A(s,a) = G - V(s)
+            # Advantage Estimation: How much better was this action than the Critic's baseline?
             advantages = rewards - state_values.detach()
             
-            # Clipped Surrogate Objective
+            # Clipped Surrogate Objective: The heart of PPO.
+            # Limits the 'incentive' to change the policy too much in one update.
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
-            # Total Loss = -min(surr1, surr2) + ValueLoss - EntropyBonus
-            # Negative sign on min because we want to maximize the objective
-            actor_loss = -torch.min(surr1, surr2)
-            critic_loss = 0.5 * self.MseLoss(state_values, rewards)
-            entropy_loss = -0.01 * dist_entropy # Encourages exploration
+            # Total Loss: Combine Policy improvement, Value accuracy, and Exploration
+            actor_loss = -torch.min(surr1, surr2) # Negative because we maximize reward
+            critic_loss = 0.5 * self.MseLoss(state_values, rewards) # Minimize error in V(s)
+            entropy_loss = -0.01 * dist_entropy # Bonus for 'uncertainty' to keep exploring
 
             loss = actor_loss + critic_loss + entropy_loss
 
@@ -158,7 +162,7 @@ class PPO:
             self.optimizer.zero_grad()
             loss.mean().backward()
             
-            # Logging (if logger provided)
+            # Periodic logging of internal metrics (KL divergence, clip fraction)
             if logger and epoch == self.K_epochs - 1:
                 with torch.no_grad():
                     approx_kl = (old_logprobs - logprobs).mean()
@@ -174,7 +178,7 @@ class PPO:
 
             self.optimizer.step()
 
-        # Update the old policy weights
+        # Finalize Update: Synchronize the 'old' policy with the newly optimized one
         self.update_count += 1
         self.policy_old.load_state_dict(self.policy.state_dict())
 

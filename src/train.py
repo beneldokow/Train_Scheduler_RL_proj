@@ -22,7 +22,6 @@ from src.visualizer import TrainRouteVisualizer
 from src.wrappers import RDDLDecisionWrapper, PPOAdapter
 from src.agent import PPO, Memory, device
 from src.logger import RewardLogger, TensorboardLogger
-from src.visualize_stats import create_dashboard
 
 """
 Train Scheduler RL - Main Training Entry Point
@@ -120,7 +119,7 @@ env = PPOAdapter(env)          # Flattens state and handles discrete actions
 # 6. Agent Initialization
 state_dim = env.observation_space.shape[0]
 action_dim = 11 # 0 to 10 minutes of wait time
-ppo = PPO(state_dim, action_dim, lr=0.002, betas=(0.9, 0.999), gamma=0.99, K_epochs=4, eps_clip=0.2)
+ppo = PPO(state_dim, action_dim, lr=0.002, betas=(0.9, 0.999), gamma=0.99, K_epochs=20, eps_clip=0.2)
 memory = Memory()
 
 # 7. Checkpoint Resolution
@@ -197,6 +196,10 @@ for episode in pbar:
     logger.log(episode, current_ep_reward)
     tb_logger.log_scalar("reward/episode", current_ep_reward, episode)
 
+    # Periodic Model Stats Logging (for TensorBoard Histograms)
+    if episode % log_interval == 0:
+        tb_logger.log_model_stats(ppo.policy, episode)
+
     # Best Model Save
     if current_ep_reward > best_reward:
         best_reward = current_ep_reward
@@ -211,13 +214,8 @@ for episode in pbar:
         avg_reward = running_reward / log_interval
         pbar.set_postfix({"Avg Rew": f"{avg_reward:.2f}", "Best": f"{best_reward:.2f}"})
         running_reward = 0
-        logger.plot()
 
-# Cleanup and Dashboard Generation
+
+# Cleanup
 env.close()
-logger.plot()
 tb_logger.close()
-
-# Final Step: Generate the Interactive Training Dashboard
-DASHBOARD_PATH = os.path.join(OUTPUT_DIR, "training_dashboard.html")
-create_dashboard(TENSORBOARD_DIR, latest_model_path, DASHBOARD_PATH)

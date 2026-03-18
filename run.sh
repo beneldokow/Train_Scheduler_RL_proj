@@ -136,6 +136,7 @@ python3 src/train.py "${ARGS[@]}"
 if [ $? -eq 0 ]; then
     echo "------------------------------------------------"
     echo "Training Complete!"
-    echo "Interactive Dashboard: output/training_dashboard.html"
+    echo "Launching TensorBoard Dashboard..."
     echo "------------------------------------------------"
+    tensorboard --logdir output/tensorboard
 fi
