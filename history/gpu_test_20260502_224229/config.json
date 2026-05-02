@@ -1,0 +1,13 @@
+{
+    "episodes": 100,
+    "additional_episodes": null,
+    "log_interval": 20,
+    "save_interval": 50,
+    "update_timestep": 2000,
+    "force_restart": true,
+    "instance_path": null,
+    "num_trains": 3,
+    "num_stations": 4,
+    "variance_factor": 0.2,
+    "run_name": "gpu_test"
+}
