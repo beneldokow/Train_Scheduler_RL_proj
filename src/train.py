@@ -5,6 +5,7 @@ import argparse
 import pyRDDLGym
 import warnings
 import json
+from datetime import datetime
 from pyRDDLGym.core.visualizer.movie import MovieGenerator
 from tqdm import tqdm
 
@@ -46,16 +47,31 @@ parser.add_argument("--instance_path", type=str, default=None, help="Path to a s
 parser.add_argument("--num_trains", type=int, default=3, help="Number of trains for the generated instance")
 parser.add_argument("--num_stations", type=int, default=4, help="Number of stations for the generated instance")
 parser.add_argument("--variance_factor", type=float, default=0.2, help="Variance factor for stochastic passenger arrivals")
+parser.add_argument("--run_name", type=str, default=None, help="Name for this significant run (saved to history/)")
 args = parser.parse_args()
 
 # Directory Configuration
-RDDL_DIR = os.path.join(BASE_PATH, "rddl")
-os.makedirs(RDDL_DIR, exist_ok=True)
-OUTPUT_DIR = os.path.join(BASE_PATH, "output")
+if args.run_name:
+    # Significant run: Save all info to a dedicated history directory (not git-ignored)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    RUN_DIR = os.path.join(BASE_PATH, "history", f"{args.run_name}_{timestamp}")
+    os.makedirs(RUN_DIR, exist_ok=True)
+    OUTPUT_DIR = os.path.join(RUN_DIR, "output")
+    checkpoint_dir = os.path.join(RUN_DIR, "checkpoints")
+    # Save a copy of the config for reproducibility
+    with open(os.path.join(RUN_DIR, "config.json"), "w") as f:
+        json.dump(vars(args), f, indent=4)
+else:
+    # Standard/Temporary run: Use root output/checkpoints directories (git-ignored)
+    OUTPUT_DIR = os.path.join(BASE_PATH, "output")
+    checkpoint_dir = os.path.join(BASE_PATH, "checkpoints")
+
 TENSORBOARD_DIR = os.path.join(OUTPUT_DIR, "tensorboard")
+RDDL_DIR = os.path.join(BASE_PATH, "rddl")
 DOMAIN_PATH = os.path.join(RDDL_DIR, "domain.rddl")
 DEFAULT_INSTANCE_PATH = os.path.join(RDDL_DIR, "instance.rddl")
-checkpoint_dir = os.path.join(BASE_PATH, "checkpoints")
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(checkpoint_dir, exist_ok=True)
 
 # Resolve Instance Path

@@ -46,3 +46,6 @@ context_for_agent.md
 full_project_context.md
 rddl/instance.rddl
 !rddl/instances/
+
+# Run History (Keep significant runs)
+!history/

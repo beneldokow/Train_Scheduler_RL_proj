@@ -123,6 +123,10 @@ while [[ $# -gt 0 ]]; do
       ARGS+=("--instance_path" "rddl/instances/$2.rddl")
       shift 2
       ;;
+    --run_name)
+      ARGS+=("--run_name" "$2")
+      shift 2
+      ;;
     *)
       ARGS+=("$1")
       shift
