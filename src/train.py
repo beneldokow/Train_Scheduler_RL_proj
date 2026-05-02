@@ -53,14 +53,15 @@ args = parser.parse_args()
 # Directory Configuration
 if args.run_name:
     # Significant run: Save all info to a dedicated history directory (not git-ignored)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    RUN_DIR = os.path.join(BASE_PATH, "history", f"{args.run_name}_{timestamp}")
+    RUN_DIR = os.path.join(BASE_PATH, "history", args.run_name)
     os.makedirs(RUN_DIR, exist_ok=True)
     OUTPUT_DIR = os.path.join(RUN_DIR, "output")
     checkpoint_dir = os.path.join(RUN_DIR, "checkpoints")
-    # Save a copy of the config for reproducibility
-    with open(os.path.join(RUN_DIR, "config.json"), "w") as f:
-        json.dump(vars(args), f, indent=4)
+    # Save a copy of the config for reproducibility (only if it's a new run)
+    config_path = os.path.join(RUN_DIR, "config.json")
+    if not os.path.exists(config_path):
+        with open(config_path, "w") as f:
+            json.dump(vars(args), f, indent=4)
 else:
     # Standard/Temporary run: Use root output/checkpoints directories (git-ignored)
     OUTPUT_DIR = os.path.join(BASE_PATH, "output")
