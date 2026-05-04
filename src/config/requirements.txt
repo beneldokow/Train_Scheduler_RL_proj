@@ -10,3 +10,4 @@ pygame-ce
 opencv-python
 tqdm
 tensorboard
+pandas

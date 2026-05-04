@@ -96,7 +96,7 @@ fi
 source "$VENV_DIR/bin/activate"
 echo "Verifying dependencies..."
 pip install -q --upgrade pip
-pip install -q -r requirements.txt
+pip install -q -r src/config/requirements.txt
 
 # 5. Argument Preprocessing
 ARGS=()
