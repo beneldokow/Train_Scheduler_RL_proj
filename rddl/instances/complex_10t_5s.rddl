@@ -1,0 +1,37 @@
+// Automatically generated instance for the Train Scheduler RL Project
+// Configuration: 10 Trains, 5 Stations
+
+non-fluents nf_complex_10t_5s {
+    domain = train_scheduler;
+    objects {
+        train : {t1, t2, t3, t4, t5, t6, t7, t8, t9, t10};
+        station : {s1, s2, s3, s4, s5};
+    };
+    init-fluents {
+        // Initial station-train mapping (simple distribution)
+        at(t1, s1) = true;
+        at(t2, s2) = true;
+        at(t3, s3) = true;
+        at(t4, s4) = true;
+        at(t5, s5) = true;
+        at(t6, s1) = true;
+        at(t7, s2) = true;
+        at(t8, s3) = true;
+        at(t9, s4) = true;
+        at(t10, s5) = true;
+    };
+}
+
+instance complex_10t_5s {
+    domain = train_scheduler;
+    objects {
+        train : {t1, t2, t3, t4, t5, t6, t7, t8, t9, t10};
+        station : {s1, s2, s3, s4, s5};
+    };
+    init-fluents {
+        // Horizon calculation: (2 * trains * stations) + 10 = (2 * 10 * 5) + 10 = 110
+        // Note: The train_scheduler domain uses the model's defined horizon
+    };
+    non-fluents = nf_complex_10t_5s;
+    horizon = 110;
+}
