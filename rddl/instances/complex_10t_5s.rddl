@@ -1,37 +1,152 @@
-// Automatically generated instance for the Train Scheduler RL Project
-// Configuration: 10 Trains, 5 Stations
+non-fluents nf_simple_train_model{
+    domain = train_system;
 
-non-fluents nf_complex_10t_5s {
-    domain = train_scheduler;
-    objects {
+    objects{
         train : {t1, t2, t3, t4, t5, t6, t7, t8, t9, t10};
         station : {s1, s2, s3, s4, s5};
     };
-    init-fluents {
-        // Initial station-train mapping (simple distribution)
-        at(t1, s1) = true;
-        at(t2, s2) = true;
-        at(t3, s3) = true;
-        at(t4, s4) = true;
-        at(t5, s5) = true;
-        at(t6, s1) = true;
-        at(t7, s2) = true;
-        at(t8, s3) = true;
-        at(t9, s4) = true;
-        at(t10, s5) = true;
+
+    non-fluents{
+        NEXT_TRAIN(t1, t2) = true;
+        NEXT_TRAIN(t2, t3) = true;
+        NEXT_TRAIN(t3, t4) = true;
+        NEXT_TRAIN(t4, t5) = true;
+        NEXT_TRAIN(t5, t6) = true;
+        NEXT_TRAIN(t6, t7) = true;
+        NEXT_TRAIN(t7, t8) = true;
+        NEXT_TRAIN(t8, t9) = true;
+        NEXT_TRAIN(t9, t10) = true;
+        NEXT_TRAIN(t10, t1) = true;
+
+        DEPOT_STATION(s5) = true;
+
+        NEXT_STATION(s1, s2) = true;
+        FIND_NEXT_STATION(s1) = s2;
+        NEXT_STATION(s2, s3) = true;
+        FIND_NEXT_STATION(s2) = s3;
+        NEXT_STATION(s3, s4) = true;
+        FIND_NEXT_STATION(s3) = s4;
+        NEXT_STATION(s4, s5) = true;
+        FIND_NEXT_STATION(s4) = s5;
+        FIND_NEXT_STATION(s5) = s5;
+        FIRST_TRAIN = t1;
+
+        DRIVE_TIME(s1, s2) = 41;
+        DRIVE_TIME(s2, s3) = 32;
+        DRIVE_TIME(s3, s4) = 51;
+        DRIVE_TIME(s4, s5) = 57;
+
+        DISEMBARKING_PRECENTAGE(s1) = 0.23;
+        DISEMBARKING_PRECENTAGE(s2) = 0.13;
+        DISEMBARKING_PRECENTAGE(s3) = 0.33;
+        DISEMBARKING_PRECENTAGE(s4) = 0.07;
+        DISEMBARKING_PRECENTAGE(s5) = 0.23;
+
+        PASSENGER_ARRIVAL_RATE(s1) = 5.0;
+        PASSENGER_ARRIVAL_VAR(s1) = 1.0;
+        PASSENGER_ARRIVAL_RATE(s2) = 8.0;
+        PASSENGER_ARRIVAL_VAR(s2) = 1.6;
+        PASSENGER_ARRIVAL_RATE(s3) = 7.0;
+        PASSENGER_ARRIVAL_VAR(s3) = 1.4;
+        PASSENGER_ARRIVAL_RATE(s4) = 7.0;
+        PASSENGER_ARRIVAL_VAR(s4) = 1.4;
+        PASSENGER_ARRIVAL_RATE(s5) = 0.0;
+        PASSENGER_ARRIVAL_VAR(s5) = 0.0;
+
+        PLANNED_DEPARTURE_TIME(t1, s1) = 11;
+        PLANNED_DEPARTURE_TIME(t1, s2) = 58;
+        PLANNED_DEPARTURE_TIME(t1, s3) = 99;
+        PLANNED_DEPARTURE_TIME(t1, s4) = 152;
+        PLANNED_DEPARTURE_TIME(t1, s5) = 213;
+        PLANNED_DEPARTURE_TIME(t2, s1) = 42;
+        PLANNED_DEPARTURE_TIME(t2, s2) = 87;
+        PLANNED_DEPARTURE_TIME(t2, s3) = 122;
+        PLANNED_DEPARTURE_TIME(t2, s4) = 181;
+        PLANNED_DEPARTURE_TIME(t2, s5) = 242;
+        PLANNED_DEPARTURE_TIME(t3, s1) = 72;
+        PLANNED_DEPARTURE_TIME(t3, s2) = 117;
+        PLANNED_DEPARTURE_TIME(t3, s3) = 152;
+        PLANNED_DEPARTURE_TIME(t3, s4) = 211;
+        PLANNED_DEPARTURE_TIME(t3, s5) = 272;
+        PLANNED_DEPARTURE_TIME(t4, s1) = 102;
+        PLANNED_DEPARTURE_TIME(t4, s2) = 147;
+        PLANNED_DEPARTURE_TIME(t4, s3) = 182;
+        PLANNED_DEPARTURE_TIME(t4, s4) = 238;
+        PLANNED_DEPARTURE_TIME(t4, s5) = 298;
+        PLANNED_DEPARTURE_TIME(t5, s1) = 132;
+        PLANNED_DEPARTURE_TIME(t5, s2) = 177;
+        PLANNED_DEPARTURE_TIME(t5, s3) = 212;
+        PLANNED_DEPARTURE_TIME(t5, s4) = 266;
+        PLANNED_DEPARTURE_TIME(t5, s5) = 325;
+        PLANNED_DEPARTURE_TIME(t6, s1) = 162;
+        PLANNED_DEPARTURE_TIME(t6, s2) = 207;
+        PLANNED_DEPARTURE_TIME(t6, s3) = 242;
+        PLANNED_DEPARTURE_TIME(t6, s4) = 296;
+        PLANNED_DEPARTURE_TIME(t6, s5) = 355;
+        PLANNED_DEPARTURE_TIME(t7, s1) = 192;
+        PLANNED_DEPARTURE_TIME(t7, s2) = 237;
+        PLANNED_DEPARTURE_TIME(t7, s3) = 272;
+        PLANNED_DEPARTURE_TIME(t7, s4) = 326;
+        PLANNED_DEPARTURE_TIME(t7, s5) = 385;
+        PLANNED_DEPARTURE_TIME(t8, s1) = 222;
+        PLANNED_DEPARTURE_TIME(t8, s2) = 267;
+        PLANNED_DEPARTURE_TIME(t8, s3) = 302;
+        PLANNED_DEPARTURE_TIME(t8, s4) = 356;
+        PLANNED_DEPARTURE_TIME(t8, s5) = 415;
+        PLANNED_DEPARTURE_TIME(t9, s1) = 252;
+        PLANNED_DEPARTURE_TIME(t9, s2) = 297;
+        PLANNED_DEPARTURE_TIME(t9, s3) = 332;
+        PLANNED_DEPARTURE_TIME(t9, s4) = 386;
+        PLANNED_DEPARTURE_TIME(t9, s5) = 445;
+        PLANNED_DEPARTURE_TIME(t10, s1) = 282;
+        PLANNED_DEPARTURE_TIME(t10, s2) = 327;
+        PLANNED_DEPARTURE_TIME(t10, s3) = 362;
+        PLANNED_DEPARTURE_TIME(t10, s4) = 416;
+        PLANNED_DEPARTURE_TIME(t10, s5) = 475;
+
     };
 }
 
-instance complex_10t_5s {
-    domain = train_scheduler;
-    objects {
-        train : {t1, t2, t3, t4, t5, t6, t7, t8, t9, t10};
-        station : {s1, s2, s3, s4, s5};
+instance simple_train_model{
+    domain = train_system;
+    non-fluents = nf_simple_train_model;
+
+    init-state{
+        train_timer(t1) = 10;
+        current_state(t1) = 0;
+        current_station(t1) = s1;
+        train_timer(t2) = 40;
+        current_state(t2) = 0;
+        current_station(t2) = s1;
+        train_timer(t3) = 70;
+        current_state(t3) = 0;
+        current_station(t3) = s1;
+        train_timer(t4) = 100;
+        current_state(t4) = 0;
+        current_station(t4) = s1;
+        train_timer(t5) = 130;
+        current_state(t5) = 0;
+        current_station(t5) = s1;
+        train_timer(t6) = 160;
+        current_state(t6) = 0;
+        current_station(t6) = s1;
+        train_timer(t7) = 190;
+        current_state(t7) = 0;
+        current_station(t7) = s1;
+        train_timer(t8) = 220;
+        current_state(t8) = 0;
+        current_station(t8) = s1;
+        train_timer(t9) = 250;
+        current_state(t9) = 0;
+        current_station(t9) = s1;
+        train_timer(t10) = 280;
+        current_state(t10) = 0;
+        current_station(t10) = s1;
     };
-    init-fluents {
-        // Horizon calculation: (2 * trains * stations) + 10 = (2 * 10 * 5) + 10 = 110
-        // Note: The train_scheduler domain uses the model's defined horizon
-    };
-    non-fluents = nf_complex_10t_5s;
+
+    max-nondef-actions = pos-inf;
     horizon = 110;
+    discount = 1.0;
+
 }
+
