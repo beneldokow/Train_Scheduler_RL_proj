@@ -47,13 +47,13 @@ parser.add_argument("--instance_path", type=str, default=None, help="Path to a s
 parser.add_argument("--num_trains", type=int, default=3, help="Number of trains for the generated instance")
 parser.add_argument("--num_stations", type=int, default=4, help="Number of stations for the generated instance")
 parser.add_argument("--variance_factor", type=float, default=0.2, help="Variance factor for stochastic passenger arrivals")
-parser.add_argument("--run_name", type=str, default=None, help="Name for this significant run (saved to history/)")
+parser.add_argument("--run_name", type=str, default=None, help="Name for this significant run (saved to experiments/)")
 args = parser.parse_args()
 
 # Directory Configuration
 if args.run_name:
-    # Significant run: Save all info to a dedicated history directory (not git-ignored)
-    RUN_DIR = os.path.join(BASE_PATH, "history", args.run_name)
+    # Significant run: Save all info to a dedicated experiments directory (not git-ignored)
+    RUN_DIR = os.path.join(BASE_PATH, "experiments", args.run_name)
     os.makedirs(RUN_DIR, exist_ok=True)
     OUTPUT_DIR = os.path.join(RUN_DIR, "output")
     checkpoint_dir = os.path.join(RUN_DIR, "checkpoints")

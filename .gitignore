@@ -48,4 +48,6 @@ rddl/instance.rddl
 !rddl/instances/
 
 # Run History (Keep significant runs)
-!history/
+!experiments/
+experiments/*/output/visualizations/
+experiments/*/output/tensorboard/events.out.tfevents.*
